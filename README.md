@@ -1,118 +1,63 @@
-# CUECLUB — Cue Sports Club & Tournament Management System
+# CueClub
 
-A database-backed system designed to manage the day-to-day operations of a cue sports club, including table reservations, member credit (udhar), tournaments, player rankings, coaching assessments, and inventory.
+A cue sports club and tournament management system, built as the DBMS course project for CS F212 (Database Systems) at BITS Pilani, Hyderabad Campus. Group 18.
 
-**Course:** CS F212 — Database Systems  
-**Institution:** BITS Pilani, Hyderabad Campus  
-**Team:** Group 18  
-**Submission:** Mid-Semester, 11 October 2026
-
-## Overview
-
-CueClub brings interconnected club operations into a relational database-backed application. It is designed to reduce booking conflicts, disputed member balances, lost tournament brackets, and unexpected inventory shortages by enforcing business rules and data integrity at the database level.
-
-## Key Features
-
-- **Table reservations:** Support for hourly and per-frame billing, with overlapping bookings rejected.
-- **Member credit ledger:** Track booking charges, canteen charges, fines, and payments; enforce credit limits and prevent over-settlement.
-- **Tournament management:** Tournament registration, unique seeding, knockout and league formats, match scheduling, frame-by-frame scores, and bracket progression.
-- **Player rankings and reports:** Leaderboards, win streaks, head-to-head records, table utilization, and skill-related reports.
-- **Coaching assessments:** Record player assessments across skill areas to support team selection and development.
-- **Inventory management:** Track equipment, consumables, servicing history, and low-stock reorder flags.
-- **Role-oriented workflows:** Support club managers, staff/scorers, club members, team members/captains, and casual players.
-
-## Intended Users
-
-| User | Intended capabilities |
-|---|---|
-| Club manager (admin) | Operational overview, inventory and servicing, credit limits, tournament scheduling, and dispute resolution |
-| Staff / scorer | Reservations, billing, credit ledger entries, frame scores, and bracket advancement |
-| Club member | Book tables, view outstanding balance and discount status, and track rankings and tournament history |
-| Team member / captain | Team-selection tracking, skill assessments, and participation in tournaments |
-| Casual player | Walk-in reservations paid upfront and table availability; no credit facility |
-
-## Technology and Architecture
-
-The project report describes a three-tier application architecture with the following planned components:
-
-- **Database:** MySQL relational database
-- **Backend:** Express REST API, JWT authentication, and MySQL connection pooling
-- **Frontend:** React user interface
-- **Database logic:** Constraints, triggers, views, common table expressions (CTEs), and a transactional stored procedure
-
-> The report documents the proposed architecture and workflows. Update this section as implementation details and run instructions are finalized.
-
-## Database Design
-
-The relational design contains 11 relations:
-
-1. `Users`
-2. `Club_Member`
-3. `Game_Tables`
-4. `Reservations`
-5. `Credit_Ledger`
-6. `Tournaments`
-7. `Tournament_Registrations`
-8. `Matches`
-9. `Match_Frames`
-10. `Skill_Assessments`
-11. `Inventory_Items`
-
-The design uses primary and foreign keys, unique constraints, domain checks, and triggers to enforce integrity. It also documents normalization to BCNF where applicable.
-
-### Important Integrity Rules
-
-- A table cannot have overlapping active reservations.
-- Only club members can use the credit facility; casual players must pay upfront.
-- Member balances cannot exceed their credit limits, and payments cannot exceed outstanding balances.
-- A player can register only once per tournament, and seeds are unique within a tournament.
-- A match winner must be one of the two players, and frame scores cannot be tied.
-- Match completion is designed to update frame records, winner, next-round bracket, and ranking points in a single transaction.
-- Team roles require an active membership.
-- Inventory is flagged for restocking when quantity falls below its reorder level.
-- Historical records are retained by deactivating users instead of physically deleting them.
-
-## Main Workflows
-
-- **Match completion:** Record frame scores, determine the winner, advance the bracket, and update ranking points transactionally.
-- **Leaderboard and reports:** Generate rankings, win streaks, head-to-head statistics, table-utilization reports, and skill reports.
-- **Booking and credit:** Create reservations while validating time conflicts, payment rules, and credit limits.
-- **Inventory and coaching:** Flag low-stock items, maintain servicing history, and record skill assessments for team selection.
+Cue clubs tend to run on paper registers and the manager's memory, so bookings overlap, credit (udhar) balances get disputed, tournament brackets get lost and stock-outs are noticed late. CueClub keeps table bookings, member credit, tournaments, rankings, coaching assessments and inventory in one relational database. The business rules live in the database as constraints, triggers and a transactional procedure, so they hold no matter which client writes the data.
 
 ## Team
 
-| Member | Responsibility |
-|---|---|
-| Priyansh Thadhani | ER/EER modeling, relational mapping, schema definition, and BCNF normalization |
-| Goru Nikhil | Trigger and constraint design, foreign-key cascading rules, and transactional match-completion procedure |
-| Ananya Avunooru | Application architecture, Express REST API design, JWT authentication, and MySQL connection pooling |
-| Manya Bhateja | Reporting and views, leaderboard queries, recursive CTE bracket queries, and synthetic data generation |
-| Ujjwal Chandak | React frontend design, booking flow, credit-ledger viewer, and documentation |
+| Name | ID | Contribution |
+| --- | --- | --- |
+| Priyansh Thadhani | 2024A3PS0356H | ER/EER model, relational mapping, schema definition, BCNF analysis |
+| Goru Nikhil | 2024A3PS0357H | Triggers, CHECK constraints, foreign-key rules, `sp_complete_match` transaction |
+| Ananya Avunooru | 2024A3PS0367H | REST API design, JWT authentication, MySQL connection pooling |
+| Manya Bhateja | 2024A3PS0378H | Leaderboard views, recursive CTE for bracket queries, synthetic data script |
+| Ujjwal Chandak | 2024A3PS0379H | React UI design for booking flow and credit ledger viewer, report compilation |
 
-## Project Scope
+## Mid-sem submission
 
-**Included:** Table reservations and billing, member credit tracking, tournament brackets and scoring, rankings and reports, coaching assessments, inventory, and servicing records.
+| Item | Where |
+| --- | --- |
+| Database design document (ER/EER, relational schema, constraints, normalization) | [`docs/CueClub_MidSem_Report.pdf`](docs/CueClub_MidSem_Report.pdf) |
+| Application design (workflows, stack, architecture) | Sections 7 and 8 of the same PDF |
 
-**Out of scope:** Payment gateway integration, live streaming, multi-club franchises, and inter-club fixtures against outside players.
+## Design summary
 
-## Getting Started
+- 11 relations: `Users`, `Club_Member`, `Game_Tables`, `Reservations`, `Credit_Ledger`, `Tournaments`, `Tournament_Registrations`, `Matches`, `Match_Frames`, `Skill_Assessments`, `Inventory_Items`.
+- Users are specialised into members and casual players (disjoint, total). Members can additionally be team members, individual players or enthusiasts (overlapping, partial). The report explains how this is mapped to tables.
+- All relations are in BCNF. Three deliberate redundancies are documented in the report: the stored `Reservations.total_amount` snapshot, the materialised `Users.ranking_points`, and the outstanding balance, which is derived through a view rather than stored.
+- Rules enforced in the database: no overlapping bookings on a table, credit only for members and within their limit, one registration and one seed per player per tournament, no drawn frames, and match completion as a single transaction (frames, winner, bracket advance, ranking points).
 
-Setup instructions will be added once the repository contains the implementation files and confirmed database configuration.
+## Technology stack
 
-Before running the application, the repository should document:
+| Layer | Choice |
+| --- | --- |
+| Database | MySQL 8.0 (InnoDB) |
+| Backend | Node.js, Express REST API, JWT authentication, MySQL connection pooling |
+| Frontend | React |
 
-1. Required software and versions.
-2. How to create and configure the MySQL database.
-3. How to load the schema, triggers, views, and stored procedures.
-4. Required environment variables (provide a `.env.example`, never commit real credentials).
-5. How to install backend and frontend dependencies.
-6. How to start the backend and frontend.
-7. How to run tests or verify the core workflows.
+## Planned workflows
 
-## Repository Status
+1. **Match completion:** a scorer submits frame scores and `sp_complete_match` records them, sets the winner, advances the bracket and updates ranking points in one transaction.
+2. **Leaderboard and reports:** rankings with `RANK()`, win streaks via window functions and CTEs, head-to-head records, table utilisation, weakest skills.
+3. **Booking and credit:** staff reserve a table while triggers reject overlaps and casual-player credit, and check credit limits and payments.
+4. **Inventory and coaching:** low-stock reorder flags, servicing history, skill assessments for team selection.
 
-This README summarizes the project scope and design from the mid-semester report. Replace this status section with the current implementation status as modules are completed.
+## Progress
 
----
+| Component | Status |
+| --- | --- |
+| Requirements, ER/EER design, relational schema, normalization | Done (see report) |
+| Schema DDL, constraints, triggers | In progress |
+| Views, report queries, sample data (500+ records) | In progress |
+| REST API | Not started |
+| React frontend | Not started |
 
-*Developed by Group 18 for CS F212 — Database Systems, BITS Pilani, Hyderabad Campus.*
+## Repository layout
+
+```
+docs/        design report (PDF) and ER diagram images
+```
+
+`backend/` and `frontend/` will be added once implementation begins. Setup and run instructions will be added to this README with them.
+
