@@ -50,6 +50,15 @@ jobs:
             exit 1
           fi
 
+      - name: Require canonical database directory name
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git ls-files | grep -E '^Database/'; then
+            echo "::error::Use the lowercase database/ directory."
+            exit 1
+          fi
+
   report-integrity:
     name: Verify immutable mid-semester report
     runs-on: ubuntu-latest
@@ -84,7 +93,6 @@ jobs:
 
   database:
     name: MySQL database validation
-    if: hashFiles('database/*.sql') != ''
     runs-on: ubuntu-latest
     services:
       mysql:
@@ -104,7 +112,19 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v4
 
+      - name: Detect database scripts
+        id: detect-database
+        shell: bash
+        run: |
+          if compgen -G "database/*.sql" > /dev/null; then
+            echo "available=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            echo "No database scripts found; database validation will run after database/ is added."
+          fi
+
       - name: Check database script set
+        if: steps.detect-database.outputs.available == 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -122,9 +142,11 @@ jobs:
           done
 
       - name: Install MySQL client
+        if: steps.detect-database.outputs.available == 'true'
         run: sudo apt-get update && sudo apt-get install -y mysql-client
 
       - name: Load schema, routines, views, and seed data
+        if: steps.detect-database.outputs.available == 'true'
         shell: bash
         env:
           MYSQL_PWD: cueclub-ci
@@ -137,12 +159,14 @@ jobs:
           mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root cueclub < database/seed.sql
 
       - name: Run demonstration workflow
+        if: steps.detect-database.outputs.available == 'true'
         shell: bash
         env:
           MYSQL_PWD: cueclub-ci
         run: mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root cueclub < database/demo.sql
 
       - name: Run database constraint tests
+        if: steps.detect-database.outputs.available == 'true'
         shell: bash
         env:
           MYSQL_PWD: cueclub-ci
