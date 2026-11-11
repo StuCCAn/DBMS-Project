@@ -4,6 +4,8 @@ A cue sports club and tournament management system, built as the DBMS course pro
 
 Cue clubs tend to run on paper registers and the manager's memory, so bookings overlap, credit (udhar) balances get disputed, tournament brackets get lost and stock-outs are noticed late. CueClub keeps table bookings, member credit, tournaments, rankings, coaching assessments and inventory in one relational database. The business rules live in the database as constraints, triggers and a transactional procedure, so they hold no matter which client writes the data.
 
+The repository's GitHub Actions workflow validates the project structure, report integrity and MySQL database scripts on every push and pull request.
+
 ## Team
 
 | Name | ID | Contribution |
@@ -60,4 +62,3 @@ docs/        design report (PDF) and ER diagram images
 ```
 
 `backend/` and `frontend/` will be added once implementation begins. Setup and run instructions will be added to this README with them.
-
