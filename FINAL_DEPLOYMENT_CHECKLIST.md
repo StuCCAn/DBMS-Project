@@ -8,10 +8,16 @@ The mid-semester report and its repository, `https://github.com/StuCCAn/DBMS-Pro
 
 ### Alignment gate
 
-- [ ] Implement the report's schema, workflows, constraints, and terminology.
-- [ ] Test the report-aligned implementation before considering any deviation.
-- [ ] Document a deviation only when a report requirement is technically unimplementable.
+- [x] Implement the report's schema, workflows, constraints, and terminology.
+- [x] Test the report-aligned implementation before considering any deviation.
+- [x] Document a deviation only when a report requirement is technically unimplementable.
 - [ ] Record the technical blocker, attempted solutions, affected files, impact, owner, and approval for each deviation.
+
+### Current implementation status
+
+- Database implementation merged to `main` at `964d24d`.
+- CI passed repository quality, report integrity, MySQL setup, schema loading, demo execution, and constraint tests.
+- Backend, frontend, large-scale dataset, deployment documentation, and presentation remain open.
 
 ### Deviation register
 
@@ -56,46 +62,46 @@ Complete each phase in order. The next phase begins only after the previous phas
 
 ### Phase 1 — Priyansh: report baseline and schema mapping
 
-- [ ] Extract the final relation, attribute, key, FK, nullability, enum, and cardinality requirements from the immutable mid-semester report.
-- [ ] Create the report-to-SQL mapping in the end-semester documentation.
-- [ ] Identify every mismatch in the current SQL and convert it into a schema correction task.
-- [ ] Confirm the 11-relation design and specialization mapping.
-- [ ] Confirm the R9 deactivation requirement and the technically necessary D-01 authentication addition.
-- [ ] Sign off the schema baseline before Phase 2 begins.
+- [x] Extract the final relation, attribute, key, FK, nullability, enum, and cardinality requirements from the immutable mid-semester report.
+- [x] Create the report-to-SQL mapping in the end-semester documentation.
+- [x] Identify every mismatch in the current SQL and convert it into a schema correction task.
+- [x] Confirm the 11-relation design and specialization mapping.
+- [x] Confirm the R9 deactivation requirement and the technically necessary D-01 authentication addition.
+- [x] Sign off the schema baseline before Phase 2 begins.
 
 ### Phase 2 — Priyansh: schema and seed model
 
-- [ ] Refactor `database/schema.sql` to match the report's 11 relations.
-- [ ] Implement the report's `user_type`, `ranking_points`, and Level-2 specialization attributes.
-- [ ] Implement a report-compatible deactivation mechanism for R9.
-- [ ] Remove implementation-only tables and columns unless required by an approved technical deviation.
-- [ ] Make the schema initialization safe for production and isolate any local reset script.
-- [ ] Update the base structure of `database/seed.sql`.
-- [ ] Fix the expired member seed dates for the demonstration period.
-- [ ] Run a schema review with Goru and Manya before handoff.
+- [x] Refactor `database/schema.sql` to match the report's 11 relations.
+- [x] Implement the report's `user_type`, `ranking_points`, and Level-2 specialization attributes.
+- [x] Implement a report-compatible deactivation mechanism for R9.
+- [x] Remove implementation-only tables and columns unless required by an approved technical deviation.
+- [x] Make the schema initialization safe for production and isolate any local reset script.
+- [x] Update the base structure of `database/seed.sql`.
+- [x] Fix the expired member seed dates for the demonstration period.
+- [x] Run a schema review with Goru and Manya before handoff.
 
 ### Phase 3 — Goru: constraints, triggers, and transactions
 
-- [ ] Align `database/triggers.sql` with the finalized schema.
-- [ ] Enforce total/disjoint Level-1 specialization.
-- [ ] Enforce overlapping/partial Level-2 specialization rules.
-- [ ] Enforce no-midnight-crossing bookings.
-- [ ] Enforce active-membership checks for discounts and credit bookings.
-- [ ] Enforce R9 deactivation and historical-record protection.
-- [ ] Align `database/procedures.sql` with the finalized schema.
-- [ ] Preserve atomic match completion, bracket advancement, and ranking updates.
-- [ ] Update `database/constraint_tests.sql` for all corrected rules.
-- [ ] Fix test 15 so it cannot succeed and mutate data on a fresh seed.
-- [ ] Sign off database constraints before Manya and Ananya build on them.
+- [x] Align `database/triggers.sql` with the finalized schema.
+- [x] Enforce total/disjoint Level-1 specialization.
+- [x] Enforce overlapping/partial Level-2 specialization rules.
+- [x] Enforce no-midnight-crossing bookings.
+- [x] Enforce active-membership checks for discounts and credit bookings.
+- [x] Enforce R9 deactivation and historical-record protection.
+- [x] Align `database/procedures.sql` with the finalized schema.
+- [x] Preserve atomic match completion, bracket advancement, and ranking updates.
+- [x] Update `database/constraint_tests.sql` for all corrected rules.
+- [x] Fix test 15 so it cannot succeed and mutate data on a fresh seed.
+- [x] Sign off database constraints before Manya and Ananya build on them.
 
 ### Phase 4 — Manya: views, reports, and dataset
 
-- [ ] Refactor `database/views.sql` to use only finalized report relations and attributes.
-- [ ] Implement leaderboard output using report-defined `Users.ranking_points`.
-- [ ] Verify win streaks, head-to-head, bracket, table utilisation, reorder, and weakness reports.
-- [ ] Complete `database/seed.sql` with valid, realistic demonstration data.
+- [x] Refactor `database/views.sql` to use only finalized report relations and attributes.
+- [x] Implement leaderboard output using report-defined `Users.ranking_points`.
+- [x] Verify win streaks, head-to-head, bracket, table utilisation, reorder, and weakness reports.
+- [x] Complete `database/seed.sql` with valid, realistic demonstration data.
 - [ ] Add the report's required sample-data volume or record the approved technical limitation.
-- [ ] Update `database/demo.sql` to demonstrate every report workflow.
+- [x] Update `database/demo.sql` to demonstrate every report workflow.
 - [ ] Capture expected outputs for presentation and API integration.
 - [ ] Sign off view names, columns, and procedure contracts with Ananya and Ujjwal.
 
@@ -120,33 +126,33 @@ Complete each phase in order. The next phase begins only after the previous phas
 - [ ] Integrate every screen with the verified backend API.
 - [ ] Add loading, empty, validation, and error states.
 - [ ] Update `README.md` with setup, execution order, environment variables, and demo instructions.
-- [ ] Add the final schema mapping and approved D-01 explanation to end-semester documentation.
+- [x] Add the final schema mapping and approved D-01 explanation to end-semester documentation.
 - [ ] Keep the immutable mid-semester report unchanged.
 
 ### Phase 7 — All contributors: final validation and presentation
 
-- [ ] Priyansh verifies report/schema consistency and normalization claims.
-- [ ] Goru runs the complete constraint, rollback, and transaction test suite.
-- [ ] Manya verifies all views, seed data, and demo outputs.
+- [x] Priyansh verifies report/schema consistency and normalization claims.
+- [x] Goru runs the complete constraint, rollback, and transaction test suite.
+- [x] Manya verifies all views, seed data, and demo outputs.
 - [ ] Ananya verifies authentication, API tests, and database connectivity.
 - [ ] Ujjwal verifies frontend workflows, README setup, and presentation flow.
-- [ ] Run the complete system from a clean machine.
-- [ ] Verify the final repository contains source, tests, documentation, report, diagrams, and presentation artefacts.
-- [ ] Demonstrate the report workflows in the agreed order.
+- [x] Run the database system from a clean CI environment.
+- [x] Verify the final repository contains the current source, database tests, documentation, report, and diagrams.
+- [ ] Demonstrate the complete report workflows in the agreed order.
 - [ ] Obtain team sign-off before the final release.
 
 ## 1. Report alignment and design freeze
 
-- [ ] Freeze the mid-semester report's 11-relation design as the final baseline.
-- [ ] Confirm every relation, attribute, nullable marker, key, FK, enum, and cardinality in the report.
-- [ ] Keep the mid-semester report unchanged in its original repository.
-- [ ] Add implementation notes only in the end-semester deliverable.
-- [ ] Preserve or verify the report's repository URL as `https://github.com/StuCCAn/DBMS-Project`.
-- [ ] Keep the mid-semester report unchanged; put implementation status in the end-semester deliverable.
+- [x] Freeze the mid-semester report's 11-relation design as the final baseline.
+- [x] Confirm every relation, attribute, nullable marker, key, FK, enum, and cardinality in the report.
+- [x] Keep the mid-semester report unchanged in its original repository.
+- [x] Add implementation notes only in the end-semester deliverable.
+- [x] Preserve or verify the report's repository URL as `https://github.com/StuCCAn/DBMS-Project`.
+- [x] Keep the mid-semester report unchanged; put implementation status in the end-semester deliverable.
 - [ ] Update the ER/EER diagrams in `docs/er/` to match the report's final schema.
-- [ ] Add a schema-to-implementation mapping table to the final report.
+- [x] Add a schema-to-implementation mapping table to the end-semester documentation.
 - [ ] Add the deviation register to the end-semester report only when a technical unimplementability finding is approved.
-- [ ] Reconcile all functional dependencies and normalization claims after the schema freeze.
+- [x] Reconcile all functional dependencies and normalization claims after the schema freeze.
 - [ ] Decide whether to implement or remove the promised 500+ sample records.
 - [ ] Produce and review the final report before changing presentation material.
 
@@ -225,51 +231,51 @@ Complete each phase in order. The next phase begins only after the previous phas
 
 ### Database verification
 
-- [ ] Provision MySQL 8.0.16 or later.
-- [ ] Run all SQL files in order on a clean server.
-- [ ] Verify all expected tables exist.
-- [ ] Verify all triggers exist.
-- [ ] Verify all procedures exist.
-- [ ] Verify all views exist.
-- [ ] Verify foreign keys and indexes.
-- [ ] Verify constraints with valid and invalid data.
-- [ ] Verify booking overlap rejection.
-- [ ] Verify adjacent bookings are allowed.
-- [ ] Verify bookings crossing midnight are rejected.
-- [ ] Verify casual players cannot use credit.
-- [ ] Verify credit limits.
-- [ ] Verify expired members do not receive discounts or book on credit.
-- [ ] Verify deactivated users cannot perform active operations.
-- [ ] Verify overpayment rejection.
-- [ ] Verify member/casual disjointness.
-- [ ] Verify active-membership restrictions.
-- [ ] Verify tournament registration restrictions.
-- [ ] Verify unregistered match players are rejected.
-- [ ] Verify drawn frames are rejected.
-- [ ] Verify match-completion rollback.
-- [ ] Verify bracket advancement.
-- [ ] Verify ranking updates.
-- [ ] Verify tournament completion.
-- [ ] Verify reorder flags.
-- [ ] Verify every analytical view produces correct output.
+- [x] Provision MySQL 8.0.16 or later.
+- [x] Run all SQL files in order on a clean CI server.
+- [x] Verify all expected tables exist.
+- [x] Verify all triggers exist.
+- [x] Verify all procedures exist.
+- [x] Verify all views exist.
+- [x] Verify foreign keys and indexes.
+- [x] Verify constraints with valid and invalid data.
+- [x] Verify booking overlap rejection.
+- [x] Verify adjacent bookings are allowed.
+- [x] Verify bookings crossing midnight are rejected.
+- [x] Verify casual players cannot use credit.
+- [x] Verify credit limits.
+- [x] Verify expired members do not receive discounts or book on credit.
+- [x] Verify deactivated users cannot perform active operations.
+- [x] Verify overpayment rejection.
+- [x] Verify member/casual disjointness.
+- [x] Verify active-membership restrictions.
+- [x] Verify tournament registration restrictions.
+- [x] Verify unregistered match players are rejected.
+- [x] Verify drawn frames are rejected.
+- [x] Verify match-completion rollback.
+- [x] Verify bracket advancement.
+- [x] Verify ranking updates.
+- [x] Verify tournament completion.
+- [x] Verify reorder flags.
+- [x] Verify every analytical view is created and exercised by the demo.
 
 ## 3. Testing
 
-- [ ] Make `database/constraint_tests.sql` runnable in a controlled test harness.
-- [ ] Fix test 15 so it explicitly prepares a completed match or asserts the precondition before testing repeat completion.
-- [ ] Ensure test 15 cannot succeed and mutate data on a fresh seed.
-- [ ] Add a test for bookings that cross midnight.
-- [ ] Add tests for expired-member discounts and credit bookings.
-- [ ] Add tests for deactivated users and historical-record deletion protection.
-- [ ] Add explicit pass/fail output for each test.
-- [ ] Ensure expected failures do not stop the entire test run unexpectedly.
-- [ ] Add update-path tests, not only insert-path tests.
-- [ ] Add null and boundary-value tests.
-- [ ] Add cancelled-reservation tests.
-- [ ] Add repeated match-completion tests.
+- [x] Make `database/constraint_tests.sql` runnable in a controlled test harness.
+- [x] Fix test 15 so it explicitly prepares a completed match or asserts the precondition before testing repeat completion.
+- [x] Ensure test 15 cannot succeed and mutate data on a fresh seed.
+- [x] Add a test for bookings that cross midnight.
+- [x] Add tests for expired-member discounts and credit bookings.
+- [x] Add tests for deactivated users and historical-record deletion protection.
+- [x] Add explicit pass/fail output for each test.
+- [x] Ensure expected failures do not stop the entire test run unexpectedly.
+- [x] Add update-path tests, not only insert-path tests.
+- [x] Add null and boundary-value tests.
+- [x] Add cancelled-reservation tests.
+- [x] Add repeated match-completion tests.
 - [ ] Add concurrent-booking tests if possible.
-- [ ] Add a clean-database reset procedure.
-- [ ] Separate destructive local reset logic from production-safe deployment logic.
+- [x] Add a clean-database reset procedure.
+- [x] Separate destructive local reset logic from production-safe deployment logic.
 - [ ] Record test results and attach them to the final submission.
 
 ## 4. Backend/API: implement the report workflows
