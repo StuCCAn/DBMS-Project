@@ -11,7 +11,7 @@ The mid-semester report and its repository, `https://github.com/StuCCAn/DBMS-Pro
 - [x] Implement the report's schema, workflows, constraints, and terminology.
 - [x] Test the report-aligned implementation before considering any deviation.
 - [x] Document a deviation only when a report requirement is technically unimplementable.
-- [ ] Record the technical blocker, attempted solutions, affected files, impact, owner, and approval for each deviation.
+- [ ] Record the technical blocker, attempted solutions, affected files, impact, owner, and approval for D-01.
 
 ### Current implementation status
 
@@ -40,8 +40,8 @@ The mid-semester report and its repository, `https://github.com/StuCCAn/DBMS-Pro
 
 | Area | Owner | Status |
 |---|---|---|
-| Schema, report alignment, and normalization | Priyansh Thadhani | ☐ |
-| Constraints, triggers, and transaction validation | Goru Nikhil | ☐ |
+| Schema, report alignment, and normalization | Priyansh Thadhani | ☑ |
+| Constraints, triggers, and transaction validation | Goru Nikhil | ☑ |
 | Backend/API and authentication deviation D-01 | Ananya Avunooru | ☐ |
 | Views, reports, and dataset | Manya Bhateja | ☐ |
 | Frontend, documentation, integration, and presentation | Ujjwal Chandak | ☐ |
@@ -110,6 +110,9 @@ Complete each phase in order. The next phase begins only after the previous phas
 - [ ] Create `backend/` with Node.js, Express, and MySQL pooling.
 - [ ] Implement D-01 authentication fields and document the exact schema/API impact.
 - [ ] Add password handling, JWT authentication, and admin/staff/member access boundaries.
+- [ ] Use a password-hashing algorithm; never store or log plaintext passwords.
+- [ ] Configure JWT expiry, signing secrets, and authentication failure handling through environment variables.
+- [ ] Add authorization tests for every supported role and protected endpoint.
 - [ ] Add environment configuration and a database health endpoint.
 - [ ] Implement endpoints for booking, credit ledger, tournaments, match completion, and reports.
 - [ ] Use stored procedures and views rather than duplicating business rules in the API.
@@ -148,10 +151,9 @@ Complete each phase in order. The next phase begins only after the previous phas
 - [x] Keep the mid-semester report unchanged in its original repository.
 - [x] Add implementation notes only in the end-semester deliverable.
 - [x] Preserve or verify the report's repository URL as `https://github.com/StuCCAn/DBMS-Project`.
-- [x] Keep the mid-semester report unchanged; put implementation status in the end-semester deliverable.
 - [ ] Update the ER/EER diagrams in `docs/er/` to match the report's final schema.
 - [x] Add a schema-to-implementation mapping table to the end-semester documentation.
-- [ ] Add the deviation register to the end-semester report only when a technical unimplementability finding is approved.
+- [ ] Complete the D-01 deviation register entry with blocker, attempted alternatives, impact, owner, and approval evidence.
 - [x] Reconcile all functional dependencies and normalization claims after the schema freeze.
 - [ ] Decide whether to implement or remove the promised 500+ sample records.
 - [ ] Produce and review the final report before changing presentation material.
@@ -160,74 +162,80 @@ Complete each phase in order. The next phase begins only after the previous phas
 
 ### `database/schema.sql`
 
-- [ ] Make `Users` match the report, including `user_type` and `ranking_points`.
-- [ ] Make `Club_Member` match the report, including the documented specialization flags and nullable subtype attributes.
-- [ ] Remove separate `Casual_Player`, `Team_Member`, `Individual_Player`, and `Team_Enthusiast` tables unless technically required by the report.
-- [ ] Remove extra tables not in the report, including `Teams`, `Penalties`, `Player_Rankings`, `Vendors`, and `Purchase_Orders`.
-- [ ] Make `Credit_Ledger.entry_type` match the report's documented domain.
-- [ ] Make `Tournaments.format` match the report's documented domain.
-- [ ] Make inventory/vendor attributes match the report.
-- [ ] Recheck all PKs, FKs, nullability, unique constraints, CHECK constraints, and delete actions against the report.
-- [ ] Preserve the report's disjoint/total Level-1 specialization and overlapping/partial Level-2 specialization.
-- [ ] Preserve the report's rule that historical financial and match records are not physically deleted.
-- [ ] Add a report-compatible deactivation field or mechanism for R9, and prevent deletion of users with historical records.
-- [ ] Add authentication and role fields only under approved deviation D-01.
-- [ ] Add a safe non-destructive initialization path; do not drop an existing production database.
-- [ ] Remove or isolate the `DROP DATABASE` statement from production deployment.
+- [x] Make `Users` match the report, including `user_type` and `ranking_points`.
+- [x] Make `Club_Member` match the report, including the documented specialization flags and nullable subtype attributes.
+- [x] Remove separate `Casual_Player`, `Team_Member`, `Individual_Player`, and `Team_Enthusiast` tables unless technically required by the report.
+- [x] Remove extra tables not in the report, including `Teams`, `Penalties`, `Player_Rankings`, `Vendors`, and `Purchase_Orders`.
+- [x] Make `Credit_Ledger.entry_type` match the report's documented domain.
+- [x] Make `Tournaments.format` match the report's documented domain.
+- [x] Make inventory/vendor attributes match the report.
+- [x] Recheck all PKs, FKs, nullability, unique constraints, CHECK constraints, and delete actions against the report.
+- [x] Preserve the report's disjoint/total Level-1 specialization and overlapping/partial Level-2 specialization.
+- [x] Preserve the report's rule that historical financial and match records are not physically deleted.
+- [x] Add a report-compatible deactivation field or mechanism for R9, and prevent deletion of users with historical records.
+- [ ] Approve and document authentication and role fields under D-01 before backend release.
+- [x] Add a safe non-destructive initialization path; do not drop an existing production database.
+- [x] Remove or isolate the `DROP DATABASE` statement from production deployment.
 
 ### `database/triggers.sql`
 
-- [ ] Rewrite specialization triggers for the report's `user_type` and `Club_Member` flags, or document the approved alternative.
-- [ ] Enforce the report's total specialization rule for every `Users` row.
-- [ ] Enforce the report's conditional subtype-attribute rules.
-- [ ] Align booking, credit, registration, match, coaching, and inventory triggers with the final schema.
-- [ ] Add update-path triggers wherever the report requires invariants after updates.
-- [ ] Verify every trigger message maps to a documented report rule.
-- [ ] Enforce R1 by rejecting reservations whose start and end dates differ.
-- [ ] Enforce membership expiry for discounts and credit bookings.
-- [ ] Enforce deactivation rules before user operations.
+- [x] Rewrite specialization triggers for the report's `user_type` and `Club_Member` flags, or document the approved alternative.
+- [x] Enforce the report's total specialization rule for every `Users` row.
+- [x] Enforce the report's conditional subtype-attribute rules.
+- [x] Align booking, credit, registration, match, coaching, and inventory triggers with the final schema.
+- [x] Add update-path triggers wherever the report requires invariants after updates.
+- [x] Verify every trigger message maps to a documented report rule.
+- [x] Enforce R1 by rejecting reservations whose start and end dates differ.
+- [x] Enforce membership expiry for discounts and credit bookings.
+- [x] Enforce deactivation rules before user operations.
+- [ ] Test direct SQL attempts to create a member without `Club_Member` and to remove `Club_Member` while retaining `user_type = 'Member'`.
+- [ ] Revalidate tournament status and active-user status on every relevant registration update.
 
 ### `database/procedures.sql`
 
-- [ ] Make registration procedures create exactly the report-defined user/subtype state.
-- [ ] Make booking and credit procedures use the report-defined ledger domains and relationships.
-- [ ] Apply discounts only for active members.
-- [ ] Allow `OnCredit` only for active members.
-- [ ] Update match completion to maintain the report-defined `Users.ranking_points`.
-- [ ] Keep frame insertion, winner selection, bracket advancement, ranking updates, and tournament closure atomic.
-- [ ] Add explicit validation for invalid JSON, invalid frame counts, and invalid ranking-point inputs.
+- [x] Make registration procedures create exactly the report-defined user/subtype state.
+- [x] Make booking and credit procedures use the report-defined ledger domains and relationships.
+- [x] Apply discounts only for active members.
+- [x] Allow `OnCredit` only for active members.
+- [x] Update match completion to maintain the report-defined `Users.ranking_points`.
+- [x] Keep frame insertion, winner selection, bracket advancement, ranking updates, and tournament closure atomic.
+- [x] Add explicit validation for invalid JSON, invalid frame counts, and invalid ranking-point inputs.
+- [ ] Replace `match_id` ordering as the bracket-slot selector with an explicit, deterministic feeder-slot rule.
 
 ### `database/views.sql`
 
-- [ ] Update every view to use only report-defined relations and attributes.
-- [ ] Replace `Player_Rankings` dependencies if the report-aligned schema stores ranking points in `Users`.
-- [ ] Verify member balance, leaderboard, win streak, head-to-head, bracket, utilisation, reorder, and weakness outputs against the report.
-- [ ] Document any view that intentionally uses an implementation-only helper relation.
+- [x] Update every view to use only report-defined relations and attributes.
+- [x] Replace `Player_Rankings` dependencies if the report-aligned schema stores ranking points in `Users`.
+- [x] Verify member balance, leaderboard, win streak, head-to-head, bracket, utilisation, reorder, and weakness outputs against the report.
+- [x] Document any view that intentionally uses an implementation-only helper relation.
 
 ### `database/seed.sql`
 
-- [ ] Seed only report-defined relations.
-- [ ] Add enough realistic data to demonstrate every report workflow.
+- [x] Seed only report-defined relations.
+- [x] Add enough realistic data to demonstrate every report workflow.
 - [ ] Implement the report's 500+ record requirement, or remove that claim everywhere.
-- [ ] Ensure seed data satisfies all specialization, FK, date, enum, and business-rule constraints.
-- [ ] Fix the expired seed memberships for members 4 and 7, or move all demonstration dates to a consistent valid period.
-- [ ] Make seed execution repeatable from a clean database.
+- [x] Ensure seed data satisfies all specialization, FK, date, enum, and business-rule constraints.
+- [x] Fix the expired seed memberships for members 4 and 7, or move all demonstration dates to a consistent valid period.
+- [x] Make seed execution repeatable from a clean database.
 
 ### `database/demo.sql`
 
-- [ ] Demonstrate every workflow listed in the report.
-- [ ] Demonstrate report-defined ranking storage and output.
-- [ ] Demonstrate valid and invalid specialization states.
-- [ ] Demonstrate booking, credit, tournament, bracket, inventory, and coaching workflows.
+- [x] Demonstrate every workflow listed in the report.
+- [x] Demonstrate report-defined ranking storage and output.
+- [x] Demonstrate valid and invalid specialization states.
+- [x] Demonstrate booking, credit, tournament, bracket, inventory, and coaching workflows.
 - [ ] Make the demo output suitable for screenshots and presentation evidence.
 
 ### `database/constraint_tests.sql`
 
-- [ ] Rewrite tests against the report-aligned schema.
-- [ ] Add tests for total/disjoint Level-1 specialization.
-- [ ] Add tests for overlapping/partial Level-2 specialization flags.
-- [ ] Add tests for every documented enum and CHECK boundary.
-- [ ] Add tests for all report-listed triggers and transaction rollback behavior.
+- [x] Rewrite tests against the report-aligned schema.
+- [x] Add tests for total/disjoint Level-1 specialization.
+- [x] Add tests for overlapping/partial Level-2 specialization flags.
+- [x] Add tests for every documented enum and CHECK boundary.
+- [x] Add tests for all report-listed triggers and transaction rollback behavior.
+- [ ] Add direct-SQL tests for total-specialization bypass attempts.
+- [ ] Add registration-update tests for closed tournaments and deactivated users.
+- [ ] Add bracket tests that do not depend on insertion order or `match_id` ordering.
 
 ### Database verification
 
@@ -273,7 +281,7 @@ Complete each phase in order. The next phase begins only after the previous phas
 - [x] Add null and boundary-value tests.
 - [x] Add cancelled-reservation tests.
 - [x] Add repeated match-completion tests.
-- [ ] Add concurrent-booking tests if possible.
+- [ ] Add concurrent-booking tests or explicitly document why the chosen MySQL locking strategy is sufficient.
 - [x] Add a clean-database reset procedure.
 - [x] Separate destructive local reset logic from production-safe deployment logic.
 - [ ] Record test results and attach them to the final submission.
@@ -327,6 +335,8 @@ Complete each phase in order. The next phase begins only after the previous phas
 - [ ] Add `.env.example`.
 - [ ] Confirm no secrets are committed.
 - [ ] Add production database configuration.
+- [ ] Add versioned database migrations for upgrades to an existing installation.
+- [ ] Test migration and rollback procedures against a database containing existing data.
 - [ ] Document the database setup and reset process.
 - [ ] Document script execution order.
 - [ ] Document backend build and start commands.
@@ -338,6 +348,9 @@ Complete each phase in order. The next phase begins only after the previous phas
 - [ ] Add service health checks.
 - [ ] Add a deployment architecture diagram.
 - [ ] Test deployment from a clean machine.
+- [ ] Configure `main` branch protection to require pull requests, review approval, and passing CI checks.
+- [ ] Disable direct pushes and force pushes to `main`.
+- [ ] Ensure CI includes database, backend, frontend, build, and static-quality checks before release.
 - [ ] Tag a final release commit.
 - [ ] Update `README.md` with complete setup and usage instructions.
 - [ ] Update `README.md` to describe the report-aligned schema.
