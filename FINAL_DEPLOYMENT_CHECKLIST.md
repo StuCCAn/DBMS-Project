@@ -11,19 +11,21 @@ The mid-semester report and its repository, `https://github.com/StuCCAn/DBMS-Pro
 - [x] Implement the report's schema, workflows, constraints, and terminology.
 - [x] Test the report-aligned implementation before considering any deviation.
 - [x] Document a deviation only when a report requirement is technically unimplementable.
-- [ ] Record the technical blocker, attempted solutions, affected files, impact, owner, and approval for D-01.
+- [x] Record the technical blocker, attempted solutions, affected files, impact, owner, and approval for D-01 and D-02.
 
 ### Current implementation status
 
-- Database implementation merged to `main` at `964d24d`.
+- Database foundation implemented with 11 BCNF relations; core workflows demonstrated.
 - CI passed repository quality, report integrity, MySQL setup, schema loading, demo execution, and constraint tests.
-- Backend, frontend, large-scale dataset, deployment documentation, and presentation remain open.
+- **Next Gate (Phase 4 — Manya):** DB contract freeze, lifecycle/procedure fixes, and API contract specifications must be finalized before Phase 5 (Ananya) backend implementation begins.
+- Backend, frontend, deployment documentation, and presentation remain open.
 
 ### Deviation register
 
 | ID | Report requirement | Implemented deviation | Reason and impact | Affected files | Approval/evidence |
 |---|---|---|---|---|---|
-| D-01 | Authentication and admin/staff roles | The report's 11-table schema has no password, authentication, or role attributes, so JWT role-based access cannot be implemented from the report alone. | Add the minimum authentication/role model in the end-semester implementation and document the schema/API impact. | `database/schema.sql`, backend, final report |  |
+| D-01 | Authentication and admin/staff roles | The report's 11-table schema has no password, authentication, or role attributes, so JWT role-based access cannot be implemented from the report alone. | Add the minimum authentication/role model (`password_hash`, `app_role`) in the end-semester implementation and document the schema/API impact. | `database/schema.sql`, backend, final report | Approved by Priyansh Thadhani & Ujjwal Chandak (Nov 2026, PR #4 / `docs/SCHEMA_MAPPING_AND_BASELINE.md`). Adds minimal `password_hash` and `app_role` to `Users` to support JWT RBAC without altering the 11 report relations. |
+| D-02 | Booking cancellation and credit refund | The report defines credit charges and payments, but has no explicit cancellation protocol. | Implement `sp_cancel_booking` to transition status to 'Cancelled' and post a compensating reversal entry in `Credit_Ledger`. **Refund Policy:** Credit refund is capped at the member's current outstanding balance (`LEAST(booking_amount, outstanding_balance)`) to avoid violating `trg_ledger_bi` ('Payment exceeds outstanding balance') if the charge was already paid down. Bookings never charged to credit (Pending or cash-Paid) update status to 'Cancelled' without posting ledger entries. | `database/procedures.sql`, `database/triggers.sql`, backend | Approved by Goru Nikhil & Ananya Avunooru (Nov 2026). Works without schema alteration: `Reservations.payment_status` already contains `'Cancelled'`, and credit refund is represented by a positive `Credit_Ledger` entry (`entry_type = 'Payment'`, `note = 'Booking cancellation refund: #ID'`) which decrements outstanding balance in `v_member_balance` while satisfying `ck_led_amount (amount > 0)`. |
 
 ## Report-to-file traceability
 
@@ -42,8 +44,8 @@ The mid-semester report and its repository, `https://github.com/StuCCAn/DBMS-Pro
 |---|---|---|
 | Schema, report alignment, and normalization | Priyansh Thadhani | ☑ |
 | Constraints, triggers, and transaction validation | Goru Nikhil | ☑ |
+| Views, reports, dataset, and DB contract freeze for API | Manya Bhateja | ☐ |
 | Backend/API and authentication deviation D-01 | Ananya Avunooru | ☐ |
-| Views, reports, and dataset | Manya Bhateja | ☐ |
 | Frontend, documentation, integration, and presentation | Ujjwal Chandak | ☐ |
 
 ## Sequential work plan
@@ -55,8 +57,8 @@ Complete each phase in order. The next phase begins only after the previous phas
 | 1. Freeze report baseline and schema mapping | Priyansh Thadhani | None | Schema mapping and unresolved questions are recorded |
 | 2. Implement schema and seed model | Priyansh Thadhani | Phase 1 | `database/schema.sql` and the base of `database/seed.sql` match the report |
 | 3. Implement constraints and transactions | Goru Nikhil | Phase 2 | Triggers, procedures, and constraint tests pass on the schema |
-| 4. Implement views and demonstration data | Manya Bhateja | Phase 3 | Views, seed completion, and demo outputs are verified |
-| 5. Implement backend/API | Ananya Avunooru | Phase 3 and agreed view/procedure interfaces | API runs against the verified database |
+| 4. Finalize DB contracts, lifecycle fixes, views, and data | Manya Bhateja | Phase 3 | DB contract frozen, lifecycle/procedure fixes verified, views corrected, and API contract signed off for Ananya |
+| 5. Implement backend/API | Ananya Avunooru | Phase 4 and agreed view/procedure interfaces | API runs against the verified database |
 | 6. Implement frontend/integration | Ujjwal Chandak | Phases 4 and 5 | Report workflows work end to end through the UI |
 | 7. Final validation and presentation | All; coordinator Ujjwal Chandak | Phase 6 | Clean setup, tests, demo, report, and presentation are signed off |
 
@@ -83,9 +85,9 @@ Complete each phase in order. The next phase begins only after the previous phas
 ### Phase 3 — Goru: constraints, triggers, and transactions
 
 - [x] Align `database/triggers.sql` with the finalized schema.
-- [x] Enforce total/disjoint Level-1 specialization.
+- [x] Enforce disjoint Level-1 specialization via triggers and totality via procedure encapsulation (diagnostic view added in Phase 4).
 - [x] Enforce overlapping/partial Level-2 specialization rules.
-- [x] Enforce no-midnight-crossing bookings.
+- [x] Enforce no-midnight-crossing bookings (boundary refinement for 00:00:00 scheduled in Phase 4).
 - [x] Enforce active-membership checks for discounts and credit bookings.
 - [x] Enforce R9 deactivation and historical-record protection.
 - [x] Align `database/procedures.sql` with the finalized schema.
@@ -94,20 +96,49 @@ Complete each phase in order. The next phase begins only after the previous phas
 - [x] Fix test 15 so it cannot succeed and mutate data on a fresh seed.
 - [x] Sign off database constraints before Manya and Ananya build on them.
 
-### Phase 4 — Manya: views, reports, and dataset
+### Phase 4 — Manya: DB contract freeze, lifecycle fixes, views, and data
 
+> [!IMPORTANT]
+> This phase forms the contract freeze gate before Phase 5 (Ananya). All database fixes, test verifications, and contract definitions below must be completed and signed off before Ananya begins backend implementation.
+
+#### Step 4.1: Database fixes and hardening
 - [x] Refactor `database/views.sql` to use only finalized report relations and attributes.
 - [x] Implement leaderboard output using report-defined `Users.ranking_points`.
 - [x] Verify win streaks, head-to-head, bracket, table utilisation, reorder, and weakness reports.
 - [x] Complete `database/seed.sql` with valid, realistic demonstration data.
-- [ ] Add the report's required sample-data volume or record the approved technical limitation.
 - [x] Update `database/demo.sql` to demonstrate every report workflow.
+- [ ] **Midnight Boundary Fix (`database/schema.sql`):** Refine `ck_res_no_midnight` to allow bookings ending at `00:00:00` (midnight dot), citing report Rule R1 (which forbids multi-day reservations crossing midnight, not terminating at midnight).
+- [ ] **100% Discount Support (`database/schema.sql`):** Update `ck_res_total` to `CHECK (total_amount >= 0)` so complimentary bookings do not violate constraints.
+- [ ] **Reservation Lifecycle & Trigger Fix (`database/triggers.sql`):** Define allowed transitions (`Pending` -> `Paid`/`Cancelled`; `OnCredit` -> `Cancelled`). Update `trg_reservation_bu` / `sp_validate_reservation` so updating `payment_status` on past reservations is not blocked by current table maintenance or expired memberships.
+- [ ] **Booking Cancellation Procedure (`database/procedures.sql`):** Implement `sp_cancel_booking(p_reservation_id)` to set status to 'Cancelled' and post a compensating positive `'Payment'` entry in `Credit_Ledger` capped at `LEAST(total_amount, outstanding_balance)` to comply with `trg_ledger_bi` (Deviation D-02).
+- [ ] **Harden `sp_complete_match` (`database/procedures.sql`):** Explicitly reject cancelled matches (`status NOT IN ('Scheduled', 'InProgress')`) and reject NULL ranking increments upfront.
+- [ ] **Credit-Limit Race Mitigation:** Add `FOR UPDATE` lock on `Club_Member` row before balance calculation in `sp_book_table` and `trg_ledger_bi`.
+- [ ] **Leaderboard View Fix (`database/views.sql`):** Remove `COALESCE(cm.preferred_game, 'Snooker')` so Casual players do not default to 'Snooker'.
+- [ ] **Diagnostic Specialization View (`database/views.sql`):** Add `v_specialization_anomalies` to identify orphan members or casuals with member rows.
+- [ ] **User Role & Type Consistency:** Enforce in procedure / trigger that `Admin` and `Staff` roles require valid associated membership records where applicable, documenting allowed combinations.
+- [ ] **Deterministic Bracket Feeder Rule:** Implement explicit feeder-slot mapping in `sp_complete_match` so bracket progression does not depend on `match_id` insertion order.
+- [ ] **Least-Privilege User Script (`database/roles.sql`):** Provision `cueclub_api` user granted only `EXECUTE` on procedures and `SELECT` on views, taking credentials from environment variables.
+
+#### Step 4.2: Comprehensive constraint and lifecycle tests (`database/constraint_tests.sql`)
+- [ ] **Re-runnable Test Harness:** Clean up temporary test fixtures (e.g., Tournament 2) upon completion so `sp_run_constraint_tests()` can be executed repeatedly on a live database without crashing on duplicate keys.
+- [ ] **Cancellation Tests:** Test cancel before start, cancel after start, cancel already-paid booking, duplicate cancel (idempotency), verify ledger refund balance, verify that cancelling a non-credit booking (`Pending` or cash-`Paid`) posts zero ledger entries, and verify that cancelling an `OnCredit` booking whose balance is already paid down caps the refund at outstanding balance without tripping the overpayment trigger.
+- [ ] **Match Hardening Tests:** Test rejection of cancelled-match completion and rejection of NULL ranking inputs.
+- [ ] **Boundary Tests:** Test a booking ending exactly at `00:00:00` and a 100% discount booking (`total_amount = 0.00`).
+- [ ] **Lifecycle Settlement Test:** Test updating `payment_status` to `'Paid'` on a historical reservation where the table is in maintenance and membership is expired.
+- [ ] **R9 Historical Delete Test:** Assert `trg_users_bd` rejects physical deletion of users with historical records.
+- [ ] **Credit-Limit Concurrency Test:** Execute a two-session test demonstrating that concurrent bookings against a shared credit limit prevent overbooking.
+- [ ] **Privilege Test:** Verify `cueclub_api` user can execute procedures and select views, but direct table `INSERT`/`UPDATE`/`DELETE` are denied.
+
+#### Step 4.3: Interface freeze and documentation
+- [ ] **Freeze API Contract (`docs/API_CONTRACT.md`):** Document exact inputs, outputs, JSON formats, error messages, and SQLSTATE codes for all procedures (`sp_register_member`, `sp_register_casual`, `sp_book_table`, `sp_cancel_booking`, `sp_complete_match`) and views.
 - [ ] Capture expected outputs for presentation and API integration.
-- [ ] Sign off view names, columns, and procedure contracts with Ananya and Ujjwal.
+- [ ] Sign off view names, columns, and procedure contracts with Ananya and Ujjwal before Phase 5 starts.
 
 ### Phase 5 — Ananya: backend/API and D-01
 
 - [ ] Create `backend/` with Node.js, Express, and MySQL pooling.
+- [ ] Connect to MySQL as the least-privilege `cueclub_api` user (never as root).
+- [ ] Code API strictly against frozen procedure and view contracts in `docs/API_CONTRACT.md`.
 - [ ] Implement D-01 authentication fields and document the exact schema/API impact.
 - [ ] Add password handling, JWT authentication, and admin/staff/member access boundaries.
 - [ ] Use a password-hashing algorithm; never store or log plaintext passwords.
@@ -122,21 +153,21 @@ Complete each phase in order. The next phase begins only after the previous phas
 
 ### Phase 6 — Ujjwal: frontend, integration, and documentation
 
-- [ ] Create `frontend/` with the report's intended user workflows.
+- [ ] Update `README.md` first with setup, execution order, environment variables, and demo accounts to unblock all team workflows.
+- [ ] Create `frontend/` React scaffolding and build screens against mock responses from `docs/API_CONTRACT.md` in parallel with Phase 5.
 - [ ] Implement login and role-aware navigation.
 - [ ] Implement manager, staff/scorer, member, team, and casual-player screens.
 - [ ] Implement booking, credit ledger, tournament/bracket, scorer, leaderboard, inventory, and coaching screens.
 - [ ] Integrate every screen with the verified backend API.
 - [ ] Add loading, empty, validation, and error states.
-- [ ] Update `README.md` with setup, execution order, environment variables, and demo instructions.
 - [x] Add the final schema mapping and approved D-01 explanation to end-semester documentation.
 - [ ] Keep the immutable mid-semester report unchanged.
 
 ### Phase 7 — All contributors: final validation and presentation
 
 - [x] Priyansh verifies report/schema consistency and normalization claims.
-- [x] Goru runs the complete constraint, rollback, and transaction test suite.
-- [x] Manya verifies all views, seed data, and demo outputs.
+- [ ] Goru runs the complete constraint, rollback, and transaction test suite.
+- [ ] Manya verifies all views, seed data, and demo outputs.
 - [ ] Ananya verifies authentication, API tests, and database connectivity.
 - [ ] Ujjwal verifies frontend workflows, README setup, and presentation flow.
 - [x] Run the database system from a clean CI environment.
@@ -153,9 +184,9 @@ Complete each phase in order. The next phase begins only after the previous phas
 - [x] Preserve or verify the report's repository URL as `https://github.com/StuCCAn/DBMS-Project`.
 - [ ] Update the ER/EER diagrams in `docs/er/` to match the report's final schema.
 - [x] Add a schema-to-implementation mapping table to the end-semester documentation.
-- [ ] Complete the D-01 deviation register entry with blocker, attempted alternatives, impact, owner, and approval evidence.
+- [x] Complete the D-01 and D-02 deviation register entries with blocker, attempted alternatives, impact, owner, and approval evidence.
 - [x] Reconcile all functional dependencies and normalization claims after the schema freeze.
-- [ ] Decide whether to implement or remove the promised 500+ sample records.
+- [x] Retain `database/seed.sql` as the clean authoritative demo seed; defer 500+ synthetic dataset generator to Tier 3.
 - [ ] Produce and review the final report before changing presentation material.
 
 ## 2. Database implementation: report-aligned changes
@@ -173,21 +204,25 @@ Complete each phase in order. The next phase begins only after the previous phas
 - [x] Preserve the report's disjoint/total Level-1 specialization and overlapping/partial Level-2 specialization.
 - [x] Preserve the report's rule that historical financial and match records are not physically deleted.
 - [x] Add a report-compatible deactivation field or mechanism for R9, and prevent deletion of users with historical records.
-- [ ] Approve and document authentication and role fields under D-01 before backend release.
+- [x] Approve and document authentication and role fields under D-01 before backend release.
 - [x] Add a safe non-destructive initialization path; do not drop an existing production database.
 - [x] Remove or isolate the `DROP DATABASE` statement from production deployment.
+- [ ] Fix `ck_res_no_midnight` to allow reservations ending exactly at midnight (`00:00:00`), citing report Rule R1.
+- [ ] Fix `ck_res_total` to `total_amount >= 0` to permit complimentary (100% discount) bookings.
 
 ### `database/triggers.sql`
 
 - [x] Rewrite specialization triggers for the report's `user_type` and `Club_Member` flags, or document the approved alternative.
-- [x] Enforce the report's total specialization rule for every `Users` row.
+- [x] Enforce the report's total specialization rule for every `Users` row via procedure encapsulation and diagnostic checks.
 - [x] Enforce the report's conditional subtype-attribute rules.
 - [x] Align booking, credit, registration, match, coaching, and inventory triggers with the final schema.
-- [x] Add update-path triggers wherever the report requires invariants after updates.
+- [ ] Add update-path triggers and lifecycle rules wherever the report requires invariants after updates (Phase 4).
 - [x] Verify every trigger message maps to a documented report rule.
 - [x] Enforce R1 by rejecting reservations whose start and end dates differ.
 - [x] Enforce membership expiry for discounts and credit bookings.
 - [x] Enforce deactivation rules before user operations.
+- [ ] Refactor `trg_reservation_bu` / `sp_validate_reservation` so updating `payment_status` (settling past dues or cancelling) does not fail due to current table maintenance or expired memberships.
+- [ ] Mitigate credit-limit race conditions by acquiring `FOR UPDATE` locks on `Club_Member` before balance verification in `trg_ledger_bi`.
 - [ ] Test direct SQL attempts to create a member without `Club_Member` and to remove `Club_Member` while retaining `user_type = 'Member'`.
 - [ ] Revalidate tournament status and active-user status on every relevant registration update.
 
@@ -199,21 +234,26 @@ Complete each phase in order. The next phase begins only after the previous phas
 - [x] Allow `OnCredit` only for active members.
 - [x] Update match completion to maintain the report-defined `Users.ranking_points`.
 - [x] Keep frame insertion, winner selection, bracket advancement, ranking updates, and tournament closure atomic.
-- [x] Add explicit validation for invalid JSON, invalid frame counts, and invalid ranking-point inputs.
+- [ ] Add explicit validation against NULL ranking-point inputs and cancelled matches (JSON format and basic bounds currently handled).
+- [ ] Implement `sp_cancel_booking(p_reservation_id)` to transition status to 'Cancelled' and post a compensating reversal entry in `Credit_Ledger` capped at outstanding balance (Deviation D-02).
+- [ ] Harden `sp_complete_match` to reject already-cancelled matches (`status NOT IN ('Scheduled', 'InProgress')`) and reject NULL ranking increments upfront.
+- [ ] Mitigate credit-limit race conditions in `sp_book_table` by taking `SELECT ... FOR UPDATE` on `Club_Member`.
 - [ ] Replace `match_id` ordering as the bracket-slot selector with an explicit, deterministic feeder-slot rule.
 
 ### `database/views.sql`
 
 - [x] Update every view to use only report-defined relations and attributes.
 - [x] Replace `Player_Rankings` dependencies if the report-aligned schema stores ranking points in `Users`.
-- [x] Verify member balance, leaderboard, win streak, head-to-head, bracket, utilisation, reorder, and weakness outputs against the report.
+- [x] Verify member balance, leaderboard, win streak, head-to-head, bracket, utilisation, reorder, and weakness reports.
 - [x] Document any view that intentionally uses an implementation-only helper relation.
+- [ ] Fix `v_leaderboard` by removing `COALESCE(cm.preferred_game, 'Snooker')` so Casual players do not default to 'Snooker'.
+- [ ] Add diagnostic specialization view `v_specialization_anomalies` to identify orphan users or casual players with membership records.
 
 ### `database/seed.sql`
 
 - [x] Seed only report-defined relations.
 - [x] Add enough realistic data to demonstrate every report workflow.
-- [ ] Implement the report's 500+ record requirement, or remove that claim everywhere.
+- [x] Maintain clean demonstration dataset in `database/seed.sql`; defer 500+ synthetic generator to Tier 3.
 - [x] Ensure seed data satisfies all specialization, FK, date, enum, and business-rule constraints.
 - [x] Fix the expired seed memberships for members 4 and 7, or move all demonstration dates to a consistent valid period.
 - [x] Make seed execution repeatable from a clean database.
@@ -233,6 +273,8 @@ Complete each phase in order. The next phase begins only after the previous phas
 - [x] Add tests for overlapping/partial Level-2 specialization flags.
 - [x] Add tests for every documented enum and CHECK boundary.
 - [x] Add tests for all report-listed triggers and transaction rollback behavior.
+- [ ] Fix test harness re-runnability by adding teardown logic for temporary test fixtures (Tournament 2, Matches 10/11) so `sp_run_constraint_tests()` does not fail on duplicate keys on repeated runs.
+- [ ] Add explicit test asserting `trg_users_bd` blocks physical deletion of users with historical records (Rule R9).
 - [ ] Add direct-SQL tests for total-specialization bypass attempts.
 - [ ] Add registration-update tests for closed tournaments and deactivated users.
 - [ ] Add bracket tests that do not depend on insertion order or `match_id` ordering.
@@ -277,11 +319,11 @@ Complete each phase in order. The next phase begins only after the previous phas
 - [x] Add tests for deactivated users and historical-record deletion protection.
 - [x] Add explicit pass/fail output for each test.
 - [x] Ensure expected failures do not stop the entire test run unexpectedly.
-- [x] Add update-path tests, not only insert-path tests.
-- [x] Add null and boundary-value tests.
-- [x] Add cancelled-reservation tests.
+- [ ] Add update-path tests, not only insert-path tests (Phase 4).
+- [ ] Add null and boundary-value tests (Phase 4).
+- [ ] Add cancelled-reservation tests (Phase 4).
 - [x] Add repeated match-completion tests.
-- [ ] Add concurrent-booking tests or explicitly document why the chosen MySQL locking strategy is sufficient.
+- [ ] Add concurrent-booking and credit-limit race tests (Phase 4).
 - [x] Add a clean-database reset procedure.
 - [x] Separate destructive local reset logic from production-safe deployment logic.
 - [ ] Record test results and attach them to the final submission.
@@ -335,8 +377,7 @@ Complete each phase in order. The next phase begins only after the previous phas
 - [ ] Add `.env.example`.
 - [ ] Confirm no secrets are committed.
 - [ ] Add production database configuration.
-- [ ] Add versioned database migrations for upgrades to an existing installation.
-- [ ] Test migration and rollback procedures against a database containing existing data.
+- [x] Standardize database initialization and clean reset via `database/schema.sql` and `database/reset_local.sql` (incremental versioned migrations deferred to Tier 3).
 - [ ] Document the database setup and reset process.
 - [ ] Document script execution order.
 - [ ] Document backend build and start commands.
@@ -378,16 +419,30 @@ Complete each phase in order. The next phase begins only after the previous phas
 - [ ] Ensure the report, repository, slides, and live demo are consistent.
 - [ ] Demonstrate behavior defined by the report and any approved technical deviations.
 
+## 8. Tier 3 (P2 — Nice to Have / Deferrable — Do Not Block Backend/Frontend)
+
+These items represent secondary hardening, volumetric scaling, and enterprise testing. They are intentionally classified as non-blocking for Phase 5 (Backend) and Phase 6 (Frontend) implementation, and can be addressed after or in parallel with application workflows.
+
+- [ ] **500+ Synthetic Seed Generator:** Create a dedicated script (`scripts/generate_large_seed.py`) to generate `database/seed_large.sql` for volumetric testing without cluttering the clean demo seed.
+- [ ] **Trigger Mutation Test Harness:** Script an automated job to drop triggers sequentially and verify that at least one named test in `constraint_tests.sql` fails.
+- [ ] **Versioned Database Migrations:** Add a versioned `migrations/` directory if incremental upgrades are requested, moving beyond baseline DDL scripts.
+- [ ] **Two-Session Table Collision Script:** Script a simulated two-session test for table booking collisions, accompanied by a written explanation of MySQL InnoDB locking strategies (credit-limit concurrency test verified in Phase 4).
+- [ ] **Recorded Demo Fallback:** Prepare recorded video walkthroughs and captured query output screenshots in case the live MySQL database is unavailable during presentation.
+- [ ] **Viva Q&A Defense Sheet:** Prepare a 1-page quick-reference sheet containing concise answers for every business rule (R1–R9), trigger, procedure, and normalization claim.
+
 ## Final release gate
 
 - [ ] All required sections above are complete or explicitly marked out of scope.
 - [ ] A clean-machine setup succeeds from the README.
 - [ ] Database tests pass.
+- [ ] CI pipeline executes `CALL sp_run_constraint_tests();` twice in succession to verify test suite re-runnability and state idempotency.
+- [ ] Mutation run completed once before release and results attached, or trigger-coverage claims in final report/slides are scoped to verified test cases.
 - [ ] Backend tests pass.
 - [ ] Frontend tests pass.
 - [ ] The end-to-end demo succeeds.
 - [ ] The final report matches the repository.
 - [ ] Every report-to-file traceability row has been checked.
-- [ ] The deviation register is empty or fully approved and documented.
+- [ ] The deviation register is empty or fully approved and documented with evidence for D-01 and D-02.
+- [ ] The presentation slides, README, and final report explicitly state the specialization design boundary: "Application-path integrity with database-level diagnostic detection, not full database-enforced specialization."
 - [ ] The reviewed final implementation is pushed to `main` in `https://github.com/StuCCAn/DBMS-Project`.
 - [ ] The team has reviewed and signed off the presentation package.
