@@ -141,9 +141,11 @@ jobs:
             test -f "$file" || { echo "::error::Missing database file: $file"; exit 1; }
           done
 
-      - name: Install MySQL client
+      - name: Install MySQL-compatible client
         if: steps.detect-database.outputs.available == 'true'
-        run: sudo apt-get update && sudo apt-get install -y mysql-client
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends mariadb-client
 
       - name: Load schema, routines, views, and seed data
         if: steps.detect-database.outputs.available == 'true'
