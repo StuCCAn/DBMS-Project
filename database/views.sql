@@ -44,7 +44,7 @@ SELECT m.match_id, t.game_type, m.player2_id AS player_id, m.player1_id AS oppon
 -- 3. Dynamic leaderboard using report-defined Users.ranking_points and RANK()
 CREATE OR REPLACE VIEW v_leaderboard AS
 SELECT u.user_id, u.name, u.user_type,
-       COALESCE(cm.preferred_game, 'Snooker') AS preferred_game,
+       cm.preferred_game AS preferred_game,
        u.ranking_points,
        COUNT(pr.match_id) AS matches_played,
        COALESCE(SUM(pr.won), 0) AS wins,
@@ -135,3 +135,38 @@ WITH latest AS (
 )
 SELECT r.player_id, u.name, r.skill_area, r.rating, r.weakness_rank
   FROM ranked r JOIN Users u ON u.user_id = r.player_id;
+
+-- 10. Diagnostic view for Level 1 & Level 2 specialization integrity
+CREATE OR REPLACE VIEW v_specialization_anomalies AS
+SELECT u.user_id, u.name, u.user_type,
+       'Casual player with Club_Member record' AS anomaly_reason
+  FROM Users u
+  JOIN Club_Member cm ON cm.user_id = u.user_id
+ WHERE u.user_type = 'Casual'
+UNION ALL
+SELECT u.user_id, u.name, u.user_type,
+       'Member missing Club_Member record' AS anomaly_reason
+  FROM Users u
+  LEFT JOIN Club_Member cm ON cm.user_id = u.user_id
+ WHERE u.user_type = 'Member' AND cm.user_id IS NULL
+UNION ALL
+SELECT u.user_id, u.name, u.user_type,
+       'Invalid Level-2 Team Member attributes' AS anomaly_reason
+  FROM Users u
+  JOIN Club_Member cm ON cm.user_id = u.user_id
+ WHERE (cm.is_team_member = FALSE AND (cm.team_role IS NOT NULL OR cm.selection_status IS NOT NULL OR cm.handedness IS NOT NULL))
+    OR (cm.is_team_member = TRUE  AND (cm.team_role IS NULL     OR cm.selection_status IS NULL     OR cm.handedness IS NULL))
+UNION ALL
+SELECT u.user_id, u.name, u.user_type,
+       'Invalid Level-2 Individual Player attributes' AS anomaly_reason
+  FROM Users u
+  JOIN Club_Member cm ON cm.user_id = u.user_id
+ WHERE (cm.is_individual_player = FALSE AND (cm.handicap IS NOT NULL OR cm.preferred_game IS NOT NULL))
+    OR (cm.is_individual_player = TRUE  AND (cm.handicap IS NULL     OR cm.preferred_game IS NULL))
+UNION ALL
+SELECT u.user_id, u.name, u.user_type,
+       'Invalid Level-2 Enthusiast attributes' AS anomaly_reason
+  FROM Users u
+  JOIN Club_Member cm ON cm.user_id = u.user_id
+ WHERE (cm.is_enthusiast = FALSE AND (cm.interest_type IS NOT NULL OR cm.wants_trial IS NOT NULL))
+    OR (cm.is_enthusiast = TRUE  AND (cm.interest_type IS NULL     OR cm.wants_trial IS NULL));

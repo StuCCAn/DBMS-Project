@@ -107,17 +107,17 @@ Complete each phase in order. The next phase begins only after the previous phas
 - [x] Verify win streaks, head-to-head, bracket, table utilisation, reorder, and weakness reports.
 - [x] Complete `database/seed.sql` with valid, realistic demonstration data.
 - [x] Update `database/demo.sql` to demonstrate every report workflow.
-- [ ] **Midnight Boundary Fix (`database/schema.sql`):** Refine `ck_res_no_midnight` to allow bookings ending at `00:00:00` (midnight dot), citing report Rule R1 (which forbids multi-day reservations crossing midnight, not terminating at midnight).
-- [ ] **100% Discount Support (`database/schema.sql`):** Update `ck_res_total` to `CHECK (total_amount >= 0)` so complimentary bookings do not violate constraints.
-- [ ] **Reservation Lifecycle & Trigger Fix (`database/triggers.sql`):** Define allowed transitions (`Pending` -> `Paid`/`Cancelled`; `OnCredit` -> `Cancelled`). Update `trg_reservation_bu` / `sp_validate_reservation` so updating `payment_status` on past reservations is not blocked by current table maintenance or expired memberships.
-- [ ] **Booking Cancellation Procedure (`database/procedures.sql`):** Implement `sp_cancel_booking(p_reservation_id)` to set status to 'Cancelled' and post a compensating positive `'Payment'` entry in `Credit_Ledger` capped at `LEAST(total_amount, outstanding_balance)` to comply with `trg_ledger_bi` (Deviation D-02).
-- [ ] **Harden `sp_complete_match` (`database/procedures.sql`):** Explicitly reject cancelled matches (`status NOT IN ('Scheduled', 'InProgress')`) and reject NULL ranking increments upfront.
-- [ ] **Credit-Limit Race Mitigation:** Add `FOR UPDATE` lock on `Club_Member` row before balance calculation in `sp_book_table` and `trg_ledger_bi`.
-- [ ] **Leaderboard View Fix (`database/views.sql`):** Remove `COALESCE(cm.preferred_game, 'Snooker')` so Casual players do not default to 'Snooker'.
-- [ ] **Diagnostic Specialization View (`database/views.sql`):** Add `v_specialization_anomalies` to identify orphan members or casuals with member rows.
-- [ ] **User Role & Type Consistency:** Enforce in procedure / trigger that `Admin` and `Staff` roles require valid associated membership records where applicable, documenting allowed combinations.
-- [ ] **Deterministic Bracket Feeder Rule:** Implement explicit feeder-slot mapping in `sp_complete_match` so bracket progression does not depend on `match_id` insertion order.
-- [ ] **Least-Privilege User Script (`database/roles.sql`):** Provision `cueclub_api` user granted only `EXECUTE` on procedures and `SELECT` on views, taking credentials from environment variables.
+- [x] **Midnight Boundary Fix (`database/schema.sql`):** Refine `ck_res_no_midnight` to allow bookings ending at `00:00:00` (midnight dot), citing report Rule R1 (which forbids multi-day reservations crossing midnight, not terminating at midnight).
+- [x] **100% Discount Support (`database/schema.sql`):** Update `ck_res_total` to `CHECK (total_amount >= 0)` so complimentary bookings do not violate constraints.
+- [x] **Reservation Lifecycle & Trigger Fix (`database/triggers.sql`):** Define allowed transitions (`Pending` -> `Paid`/`Cancelled`; `OnCredit` -> `Cancelled`). Update `trg_reservation_bu` / `sp_validate_reservation` so updating `payment_status` on past reservations is not blocked by current table maintenance or expired memberships.
+- [x] **Booking Cancellation Procedure (`database/procedures.sql`):** Implement `sp_cancel_booking(p_reservation_id)` to set status to 'Cancelled' and post a compensating positive `'Payment'` entry in `Credit_Ledger` capped at `LEAST(total_amount, outstanding_balance)` to comply with `trg_ledger_bi` (Deviation D-02).
+- [x] **Harden `sp_complete_match` (`database/procedures.sql`):** Explicitly reject cancelled matches (`status NOT IN ('Scheduled', 'InProgress')`) and reject NULL ranking increments upfront.
+- [x] **Credit-Limit Race Mitigation:** Add `FOR UPDATE` lock on `Club_Member` row before balance calculation in `sp_book_table` and `trg_ledger_bi`.
+- [x] **Leaderboard View Fix (`database/views.sql`):** Remove `COALESCE(cm.preferred_game, 'Snooker')` so Casual players do not default to 'Snooker'.
+- [x] **Diagnostic Specialization View (`database/views.sql`):** Add `v_specialization_anomalies` to identify orphan members or casuals with member rows.
+- [x] **User Role & Type Consistency:** Enforce in procedure / trigger that `Admin` and `Staff` roles require valid associated membership records where applicable, documenting allowed combinations.
+- [x] **Deterministic Bracket Feeder Rule:** Implement explicit feeder-slot mapping in `sp_complete_match` so bracket progression does not depend on `match_id` insertion order.
+- [x] **Least-Privilege User Script (`database/roles.sql`):** Provision `cueclub_api` user granted only `EXECUTE` on procedures and `SELECT` on views, taking credentials from environment variables.
 
 #### Step 4.2: Comprehensive constraint and lifecycle tests (`database/constraint_tests.sql`)
 - [x] **Re-runnable Test Harness:** Clean up temporary test fixtures (e.g., Tournament 2) upon completion so `sp_run_constraint_tests()` can be executed repeatedly on a live database without crashing on duplicate keys.
@@ -130,8 +130,8 @@ Complete each phase in order. The next phase begins only after the previous phas
 - [ ] **Privilege Test:** Verify `cueclub_api` user can execute procedures and select views, but direct table `INSERT`/`UPDATE`/`DELETE` are denied.
 
 #### Step 4.3: Interface freeze and documentation
-- [ ] **Freeze API Contract (`docs/API_CONTRACT.md`):** Document exact inputs, outputs, JSON formats, error messages, and SQLSTATE codes for all procedures (`sp_register_member`, `sp_register_casual`, `sp_book_table`, `sp_cancel_booking`, `sp_complete_match`) and views.
-- [ ] Capture expected outputs for presentation and API integration.
+- [x] **Freeze API Contract (`docs/API_CONTRACT.md`):** Document exact inputs, outputs, JSON formats, error messages, and SQLSTATE codes for all procedures (`sp_register_member`, `sp_register_casual`, `sp_book_table`, `sp_cancel_booking`, `sp_complete_match`) and views.
+- [x] Capture expected outputs for presentation and API integration.
 - [ ] Sign off view names, columns, and procedure contracts with Ananya and Ujjwal before Phase 5 starts.
 
 ### Phase 5 — Ananya: backend/API and D-01

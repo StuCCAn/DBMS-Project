@@ -4,10 +4,12 @@
 -- ============================================================================
 USE cueclub;
 
+DROP TRIGGER IF EXISTS trg_users_bi;
 DROP TRIGGER IF EXISTS trg_users_bu;
 DROP TRIGGER IF EXISTS trg_users_bd;
 DROP TRIGGER IF EXISTS trg_member_bi;
 DROP TRIGGER IF EXISTS trg_member_bu;
+DROP TRIGGER IF EXISTS trg_member_bd;
 DROP TRIGGER IF EXISTS trg_reservation_bi;
 DROP TRIGGER IF EXISTS trg_reservation_bu;
 DROP TRIGGER IF EXISTS trg_ledger_bi;
@@ -26,12 +28,37 @@ DROP PROCEDURE IF EXISTS sp_validate_club_member;
 DELIMITER $$
 
 -- ---------------------------------------------------------------
--- 1. Users: Disjoint Level-1 specialization & Rule R9 historical protection
+-- 1. Users: Disjoint Level-1 specialization, role consistency & Rule R9 historical protection
 -- ---------------------------------------------------------------
+CREATE TRIGGER trg_users_bi BEFORE INSERT ON Users FOR EACH ROW
+BEGIN
+    IF NEW.app_role IN ('Admin', 'Staff') AND NEW.user_type <> 'Member' THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Role consistency: Admin and Staff roles require user_type = Member';
+    END IF;
+    IF NEW.app_role = 'Casual' AND NEW.user_type <> 'Casual' THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Role consistency: Casual role requires user_type = Casual';
+    END IF;
+    IF NEW.app_role = 'Member' AND NEW.user_type <> 'Member' THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Role consistency: Member role requires user_type = Member';
+    END IF;
+END$$
+
 CREATE TRIGGER trg_users_bu BEFORE UPDATE ON Users FOR EACH ROW
 BEGIN
+    IF NEW.app_role IN ('Admin', 'Staff') AND NEW.user_type <> 'Member' THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Role consistency: Admin and Staff roles require user_type = Member';
+    END IF;
+    IF NEW.app_role = 'Casual' AND NEW.user_type <> 'Casual' THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Role consistency: Casual role requires user_type = Casual';
+    END IF;
+    IF NEW.app_role = 'Member' AND NEW.user_type <> 'Member' THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Role consistency: Member role requires user_type = Member';
+    END IF;
     IF NEW.user_type = 'Casual' AND EXISTS (SELECT 1 FROM Club_Member WHERE user_id = NEW.user_id) THEN
         SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'User has a Club_Member record and cannot be changed to Casual (disjoint specialization)';
+    END IF;
+    IF NEW.app_role IN ('Admin', 'Staff') AND NOT EXISTS (SELECT 1 FROM Club_Member WHERE user_id = NEW.user_id) THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Role consistency: Admin and Staff roles require an associated Club_Member record';
     END IF;
 END$$
 
@@ -89,21 +116,42 @@ BEGIN
     CALL sp_validate_club_member(NEW.user_id, NEW.start_date, NEW.end_date, NEW.is_team_member, NEW.selection_status);
 END$$
 
+CREATE TRIGGER trg_member_bd BEFORE DELETE ON Club_Member FOR EACH ROW
+BEGIN
+    IF EXISTS (SELECT 1 FROM Users WHERE user_id = OLD.user_id AND app_role IN ('Admin', 'Staff')) THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Role consistency: Cannot delete Club_Member record for Admin or Staff users';
+    END IF;
+END$$
+
 -- ---------------------------------------------------------------
 -- 3. Reservations: R1 no double booking / no crossing midnight,
 --    R2 casual upfront / active member for OnCredit, R9 active user check
 -- ---------------------------------------------------------------
 CREATE PROCEDURE sp_validate_reservation(
-    IN p_id INT, IN p_user INT, IN p_table INT,
-    IN p_start DATETIME, IN p_end DATETIME, IN p_status VARCHAR(10)
+    IN p_id INT, IN p_old_status VARCHAR(10), IN p_user INT, IN p_table INT,
+    IN p_start DATETIME, IN p_end DATETIME, IN p_status VARCHAR(10),
+    IN p_check_availability BOOL
 )
 BEGIN
     DECLARE v_table_status VARCHAR(15);
     DECLARE v_user_type VARCHAR(10);
     DECLARE v_user_active BOOL;
 
-    -- Rule R1: Bookings cannot cross midnight
-    IF DATE(p_start) <> DATE(p_end) THEN
+    -- Lifecycle transition checks for updates
+    IF p_old_status IS NOT NULL THEN
+        IF p_old_status = 'Cancelled' AND p_status <> 'Cancelled' THEN
+            SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Invalid reservation status transition: Cancelled bookings cannot change status';
+        END IF;
+        IF p_old_status = 'OnCredit' AND p_status NOT IN ('OnCredit', 'Cancelled') THEN
+            SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Invalid reservation status transition: OnCredit bookings cannot transition directly to Paid (settle via Credit_Ledger)';
+        END IF;
+        IF p_old_status = 'Pending' AND p_status NOT IN ('Pending', 'Paid', 'Cancelled') THEN
+            SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Invalid reservation status transition for Pending booking';
+        END IF;
+    END IF;
+
+    -- Rule R1: Bookings cannot cross midnight (allows terminating at midnight dot 00:00:00)
+    IF NOT (DATE(p_start) = DATE(p_end) OR (DATEDIFF(p_end, p_start) = 1 AND TIME(p_end) = '00:00:00')) THEN
         SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Rule R1: Bookings cannot cross midnight';
     END IF;
 
@@ -113,20 +161,23 @@ BEGIN
             SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Rule R9: Deactivated users cannot make active reservations';
         END IF;
 
-        -- Lock table row to serialize concurrent reservations on the same table
-        SELECT status INTO v_table_status FROM Game_Tables WHERE table_id = p_table FOR UPDATE;
-        IF v_table_status IS NULL OR v_table_status <> 'Available' THEN
-            SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Table is not available for booking';
-        END IF;
+        -- Check table availability and overlaps only on new bookings or rescheduled bookings
+        IF p_check_availability = TRUE THEN
+            -- Lock table row to serialize concurrent reservations on the same table
+            SELECT status INTO v_table_status FROM Game_Tables WHERE table_id = p_table FOR UPDATE;
+            IF v_table_status IS NULL OR v_table_status <> 'Available' THEN
+                SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Table is not available for booking';
+            END IF;
 
-        -- Rule R1: Reject overlapping interval on the same table
-        IF EXISTS (SELECT 1 FROM Reservations r
-                    WHERE r.table_id = p_table
-                      AND r.payment_status <> 'Cancelled'
-                      AND r.reservation_id <> COALESCE(p_id, 0)
-                      AND r.start_time < p_end
-                      AND r.end_time   > p_start) THEN
-            SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Double booking: table already reserved for an overlapping time range';
+            -- Rule R1: Reject overlapping interval on the same table
+            IF EXISTS (SELECT 1 FROM Reservations r
+                        WHERE r.table_id = p_table
+                          AND r.payment_status <> 'Cancelled'
+                          AND r.reservation_id <> COALESCE(p_id, 0)
+                          AND r.start_time < p_end
+                          AND r.end_time   > p_start) THEN
+                SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Double booking: table already reserved for an overlapping time range';
+            END IF;
         END IF;
 
         -- Rule R2: Casual players must pay upfront
@@ -136,13 +187,23 @@ BEGIN
 
         -- Rule R2 & Membership Expiry: OnCredit requires an active, non-expired Club_Member
         IF p_status = 'OnCredit' THEN
-            IF v_user_type <> 'Member' OR NOT EXISTS (
-                SELECT 1 FROM Club_Member m
-                 WHERE m.user_id = p_user
-                   AND DATE(p_start) BETWEEN m.start_date AND m.end_date
-                   AND CURRENT_DATE BETWEEN m.start_date AND m.end_date
-            ) THEN
-                SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Only active, non-expired club members can book on credit';
+            IF p_check_availability = TRUE THEN
+                IF v_user_type <> 'Member' OR NOT EXISTS (
+                    SELECT 1 FROM Club_Member m
+                     WHERE m.user_id = p_user
+                       AND DATE(p_start) BETWEEN m.start_date AND m.end_date
+                       AND CURRENT_DATE BETWEEN m.start_date AND m.end_date
+                ) THEN
+                    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Only active, non-expired club members can book on credit';
+                END IF;
+            ELSE
+                IF v_user_type <> 'Member' OR NOT EXISTS (
+                    SELECT 1 FROM Club_Member m
+                     WHERE m.user_id = p_user
+                       AND DATE(p_start) BETWEEN m.start_date AND m.end_date
+                ) THEN
+                    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Only active club members can hold credit bookings';
+                END IF;
             END IF;
         END IF;
     END IF;
@@ -150,12 +211,14 @@ END$$
 
 CREATE TRIGGER trg_reservation_bi BEFORE INSERT ON Reservations FOR EACH ROW
 BEGIN
-    CALL sp_validate_reservation(NULL, NEW.user_id, NEW.table_id, NEW.start_time, NEW.end_time, NEW.payment_status);
+    CALL sp_validate_reservation(NULL, NULL, NEW.user_id, NEW.table_id, NEW.start_time, NEW.end_time, NEW.payment_status, TRUE);
 END$$
 
 CREATE TRIGGER trg_reservation_bu BEFORE UPDATE ON Reservations FOR EACH ROW
 BEGIN
-    CALL sp_validate_reservation(OLD.reservation_id, NEW.user_id, NEW.table_id, NEW.start_time, NEW.end_time, NEW.payment_status);
+    DECLARE v_reschedule BOOL;
+    SET v_reschedule = (OLD.table_id <> NEW.table_id OR OLD.start_time <> NEW.start_time OR OLD.end_time <> NEW.end_time);
+    CALL sp_validate_reservation(OLD.reservation_id, OLD.payment_status, NEW.user_id, NEW.table_id, NEW.start_time, NEW.end_time, NEW.payment_status, v_reschedule);
 END$$
 
 -- ---------------------------------------------------------------

@@ -7,6 +7,7 @@ USE cueclub;
 DROP PROCEDURE IF EXISTS sp_register_member;
 DROP PROCEDURE IF EXISTS sp_register_casual;
 DROP PROCEDURE IF EXISTS sp_book_table;
+DROP PROCEDURE IF EXISTS sp_cancel_booking;
 DROP PROCEDURE IF EXISTS sp_complete_match;
 
 DELIMITER $$
@@ -60,9 +61,18 @@ BEGIN
     DECLARE v_frame  DECIMAL(8,2);
     DECLARE v_disc   DECIMAL(5,2) DEFAULT 0.00;
     DECLARE v_total  DECIMAL(10,2);
+    DECLARE v_limit  DECIMAL(10,2);
     DECLARE EXIT HANDLER FOR SQLEXCEPTION BEGIN ROLLBACK; RESIGNAL; END;
 
     START TRANSACTION;
+        -- Credit-limit race mitigation: lock Club_Member row early if booking on credit
+        IF p_pay_status = 'OnCredit' THEN
+            SELECT credit_limit INTO v_limit
+              FROM Club_Member
+             WHERE user_id = p_user
+               FOR UPDATE;
+        END IF;
+
         SELECT hourly_rate, per_frame_rate INTO v_hourly, v_frame
           FROM Game_Tables WHERE table_id = p_table;
 
@@ -94,11 +104,78 @@ BEGIN
 END$$
 
 -- ---------------------------------------------------------------
--- 3. Match completion workflow (Rule R5 & R6: single atomic transaction)
---    1. Validate JSON & match state
+-- 3. Booking cancellation workflow (Rule R1, R2, Deviation D-02)
+--    - Transitions status to 'Cancelled'
+--    - For OnCredit bookings: refunds up to outstanding balance
+--      (capped at LEAST(total_amount, outstanding_balance)) via positive 'Payment' entry in Credit_Ledger
+--    - Cash-paid or pending bookings transition to 'Cancelled' with 0 ledger entries
+--    - Idempotent: repeated calls on a Cancelled booking commit as a no-op
+-- ---------------------------------------------------------------
+CREATE PROCEDURE sp_cancel_booking(
+    IN p_reservation_id INT
+)
+BEGIN
+    DECLARE v_user_id INT;
+    DECLARE v_status VARCHAR(10);
+    DECLARE v_total DECIMAL(10,2);
+    DECLARE v_balance DECIMAL(10,2) DEFAULT 0.00;
+    DECLARE v_refund DECIMAL(10,2) DEFAULT 0.00;
+    DECLARE v_limit DECIMAL(10,2);
+    DECLARE EXIT HANDLER FOR SQLEXCEPTION BEGIN ROLLBACK; RESIGNAL; END;
+
+    START TRANSACTION;
+        SELECT user_id, payment_status, total_amount
+          INTO v_user_id, v_status, v_total
+          FROM Reservations
+         WHERE reservation_id = p_reservation_id
+           FOR UPDATE;
+
+        IF v_user_id IS NULL THEN
+            SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Reservation not found';
+        END IF;
+
+        IF v_status = 'Cancelled' THEN
+            -- Idempotent: already cancelled
+            COMMIT;
+        ELSE
+            -- Deviation D-02: Credit refund policy
+            IF v_status = 'OnCredit' THEN
+                SELECT credit_limit INTO v_limit
+                  FROM Club_Member
+                 WHERE user_id = v_user_id
+                   FOR UPDATE;
+
+                SELECT COALESCE(SUM(
+                    CASE
+                        WHEN entry_type IN ('Booking charge','Canteen charge','Fine') THEN amount
+                        WHEN entry_type = 'Payment' THEN -amount
+                        ELSE 0.00
+                    END
+                ), 0.00) INTO v_balance
+                FROM Credit_Ledger
+                WHERE user_id = v_user_id;
+
+                SET v_refund = LEAST(v_total, GREATEST(v_balance, 0.00));
+                IF v_refund > 0.00 THEN
+                    INSERT INTO Credit_Ledger(user_id, reservation_id, entry_type, amount, note)
+                    VALUES (v_user_id, p_reservation_id, 'Payment', v_refund, CONCAT('Booking cancellation refund: #', p_reservation_id));
+                END IF;
+            END IF;
+
+            UPDATE Reservations
+               SET payment_status = 'Cancelled'
+             WHERE reservation_id = p_reservation_id;
+
+            COMMIT;
+        END IF;
+END$$
+
+-- ---------------------------------------------------------------
+-- 4. Match completion workflow (Rule R5 & R6: single atomic transaction)
+--    1. Validate JSON, non-negative ranking points & playable match state
 --    2. Insert frame rows into Match_Frames
 --    3. Derive match winner (best-of-N, no level matches)
---    4. Advance winner to next_match_id bracket slot
+--    4. Advance winner to next_match_id bracket slot using deterministic feeder rule
 --    5. Update Users.ranking_points for winner and loser
 --    6. Mark Tournament as Completed when final match finishes
 -- ---------------------------------------------------------------
@@ -118,7 +195,7 @@ BEGIN
     DECLARE v_slot INT;
     DECLARE EXIT HANDLER FOR SQLEXCEPTION BEGIN ROLLBACK; RESIGNAL; END;
 
-    IF p_win_points < 0 OR p_loss_points < 0 THEN
+    IF p_win_points IS NULL OR p_loss_points IS NULL OR p_win_points < 0 OR p_loss_points < 0 THEN
         SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Ranking point increments must be non-negative';
     END IF;
     IF p_frames IS NULL OR JSON_VALID(p_frames) = 0 OR JSON_TYPE(p_frames) <> 'ARRAY' OR JSON_LENGTH(p_frames) = 0 THEN
@@ -138,6 +215,9 @@ BEGIN
     END IF;
     IF v_status = 'Completed' THEN
         SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Match is already completed';
+    END IF;
+    IF v_status NOT IN ('Scheduled', 'InProgress') THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Match is not in a playable state (must be Scheduled or InProgress)';
     END IF;
     IF v_p1 IS NULL OR v_p2 IS NULL THEN
         SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Players for this match are not decided yet';
@@ -172,10 +252,13 @@ BEGIN
 
     UPDATE Matches SET winner_id = v_winner, status = 'Completed' WHERE match_id = p_match_id;
 
-    -- 3. Advance winner to next round match
+    -- 3. Advance winner to next round match (deterministic: lowest feeder match_id feeds player1)
     IF v_next IS NOT NULL THEN
-        SELECT COUNT(*) INTO v_slot FROM Matches WHERE next_match_id = v_next AND match_id <= p_match_id;
-        IF v_slot = 1 THEN
+        SELECT MIN(match_id) INTO v_slot
+          FROM Matches
+         WHERE next_match_id = v_next;
+
+        IF p_match_id = v_slot THEN
             UPDATE Matches SET player1_id = v_winner WHERE match_id = v_next;
         ELSE
             UPDATE Matches SET player2_id = v_winner WHERE match_id = v_next;
