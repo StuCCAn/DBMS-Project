@@ -27,6 +27,13 @@ BEGIN
     );
     TRUNCATE TABLE Test_Results;
 
+    -- Clean any existing temporary test fixtures before starting
+    DELETE FROM Match_Frames WHERE match_id IN (10, 11);
+    DELETE FROM Matches WHERE match_id IN (10, 11);
+    DELETE FROM Tournament_Registrations WHERE tournament_id = 2;
+    DELETE FROM Tournaments WHERE tournament_id = 2;
+    DELETE FROM Reservations WHERE user_id = 1 AND table_id = 1 AND start_time = '2026-10-09 21:00:00';
+
     -- ----------------------------------------------------------------
     -- Test 1: Double booking on Snooker 1 (overlapping 19:00-21:00) -> MUST FAIL
     -- ----------------------------------------------------------------
@@ -223,6 +230,13 @@ BEGIN
         CALL sp_complete_match(11,'[{"p1":50,"p2":20}]',30,10);
         INSERT INTO Test_Results VALUES (16, 'Tournament/Match: Reject unregistered player, tied match & NULL slots', 'REJECTED', IF(v_err_count=3,'REJECTED','ACCEPTED'), v_err_count=3);
     END;
+
+    -- Teardown temporary test fixtures so the test harness is completely re-runnable
+    DELETE FROM Match_Frames WHERE match_id IN (10, 11);
+    DELETE FROM Matches WHERE match_id IN (10, 11);
+    DELETE FROM Tournament_Registrations WHERE tournament_id = 2;
+    DELETE FROM Tournaments WHERE tournament_id = 2;
+    DELETE FROM Reservations WHERE user_id = 1 AND table_id = 1 AND start_time = '2026-10-09 21:00:00';
 
     -- Output full test report
     SELECT * FROM Test_Results;

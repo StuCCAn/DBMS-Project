@@ -167,9 +167,14 @@ jobs:
           MYSQL_PWD: cueclub-ci
         run: mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root cueclub < database/demo.sql
 
-      - name: Run database constraint tests
+      - name: Run database constraint tests (re-runnability verification)
         if: steps.detect-database.outputs.available == 'true'
         shell: bash
         env:
           MYSQL_PWD: cueclub-ci
-        run: mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root cueclub < database/constraint_tests.sql
+        run: |
+          set -euo pipefail
+          echo "Initial execution of database constraint test suite..."
+          mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root cueclub < database/constraint_tests.sql
+          echo "Verifying test harness re-runnability and state idempotency (second consecutive run)..."
+          mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root -e "CALL cueclub.sp_run_constraint_tests();"

@@ -120,7 +120,7 @@ Complete each phase in order. The next phase begins only after the previous phas
 - [ ] **Least-Privilege User Script (`database/roles.sql`):** Provision `cueclub_api` user granted only `EXECUTE` on procedures and `SELECT` on views, taking credentials from environment variables.
 
 #### Step 4.2: Comprehensive constraint and lifecycle tests (`database/constraint_tests.sql`)
-- [ ] **Re-runnable Test Harness:** Clean up temporary test fixtures (e.g., Tournament 2) upon completion so `sp_run_constraint_tests()` can be executed repeatedly on a live database without crashing on duplicate keys.
+- [x] **Re-runnable Test Harness:** Clean up temporary test fixtures (e.g., Tournament 2) upon completion so `sp_run_constraint_tests()` can be executed repeatedly on a live database without crashing on duplicate keys.
 - [ ] **Cancellation Tests:** Test cancel before start, cancel after start, cancel already-paid booking, duplicate cancel (idempotency), verify ledger refund balance, verify that cancelling a non-credit booking (`Pending` or cash-`Paid`) posts zero ledger entries, and verify that cancelling an `OnCredit` booking whose balance is already paid down caps the refund at outstanding balance without tripping the overpayment trigger.
 - [ ] **Match Hardening Tests:** Test rejection of cancelled-match completion and rejection of NULL ranking inputs.
 - [ ] **Boundary Tests:** Test a booking ending exactly at `00:00:00` and a 100% discount booking (`total_amount = 0.00`).
@@ -273,7 +273,7 @@ Complete each phase in order. The next phase begins only after the previous phas
 - [x] Add tests for overlapping/partial Level-2 specialization flags.
 - [x] Add tests for every documented enum and CHECK boundary.
 - [x] Add tests for all report-listed triggers and transaction rollback behavior.
-- [ ] Fix test harness re-runnability by adding teardown logic for temporary test fixtures (Tournament 2, Matches 10/11) so `sp_run_constraint_tests()` does not fail on duplicate keys on repeated runs.
+- [x] Fix test harness re-runnability by adding teardown logic for temporary test fixtures (Tournament 2, Matches 10/11) so `sp_run_constraint_tests()` does not fail on duplicate keys on repeated runs.
 - [ ] Add explicit test asserting `trg_users_bd` blocks physical deletion of users with historical records (Rule R9).
 - [ ] Add direct-SQL tests for total-specialization bypass attempts.
 - [ ] Add registration-update tests for closed tournaments and deactivated users.
@@ -435,7 +435,7 @@ These items represent secondary hardening, volumetric scaling, and enterprise te
 - [ ] All required sections above are complete or explicitly marked out of scope.
 - [ ] A clean-machine setup succeeds from the README.
 - [ ] Database tests pass.
-- [ ] CI pipeline executes `CALL sp_run_constraint_tests();` twice in succession to verify test suite re-runnability and state idempotency.
+- [x] CI pipeline executes `CALL sp_run_constraint_tests();` twice in succession to verify test suite re-runnability and state idempotency.
 - [ ] Mutation run completed once before release and results attached, or trigger-coverage claims in final report/slides are scoped to verified test cases.
 - [ ] Backend tests pass.
 - [ ] Frontend tests pass.
