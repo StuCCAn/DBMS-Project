@@ -7,10 +7,6 @@
 USE cueclub;
 
 CREATE USER IF NOT EXISTS 'cueclub_api'@'%' IDENTIFIED BY 'cueclub_api_pw';
-ALTER USER 'cueclub_api'@'%' IDENTIFIED BY 'cueclub_api_pw';
-
--- Revoke all table-level modifications
-REVOKE ALL PRIVILEGES, GRANT OPTION FROM 'cueclub_api'@'%';
 
 -- Grant SELECT only on the approved analytical views
 GRANT SELECT ON cueclub.v_member_balance TO 'cueclub_api'@'%';

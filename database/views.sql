@@ -162,11 +162,11 @@ SELECT u.user_id, u.name, u.user_type,
   FROM Users u
   JOIN Club_Member cm ON cm.user_id = u.user_id
  WHERE cm.is_individual_player = FALSE
-   AND (cm.preferred_game IS NOT NULL OR cm.cue_specs IS NOT NULL)
+   AND (cm.handicap IS NOT NULL OR cm.preferred_game IS NOT NULL)
 UNION ALL
 SELECT u.user_id, u.name, u.user_type,
        'Invalid Level-2 Enthusiast attributes' AS anomaly_reason
   FROM Users u
   JOIN Club_Member cm ON cm.user_id = u.user_id
  WHERE cm.is_enthusiast = FALSE
-   AND (cm.coaching_enrolled = TRUE OR cm.loyalty_tier IS NOT NULL);
+   AND (cm.interest_type IS NOT NULL OR cm.wants_trial IS NOT NULL);
