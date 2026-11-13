@@ -136,6 +136,7 @@ jobs:
             "database/seed.sql"
             "database/demo.sql"
             "database/constraint_tests.sql"
+            "database/roles.sql"
           )
           for file in "${required[@]}"; do
             test -f "$file" || { echo "::error::Missing database file: $file"; exit 1; }
@@ -159,6 +160,7 @@ jobs:
           mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root cueclub < database/procedures.sql
           mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root cueclub < database/views.sql
           mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root cueclub < database/seed.sql
+          mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root cueclub < database/roles.sql
 
       - name: Run demonstration workflow
         if: steps.detect-database.outputs.available == 'true'

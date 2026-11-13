@@ -106,9 +106,12 @@ CREATE TABLE IF NOT EXISTS Reservations (
     CONSTRAINT fk_res_user  FOREIGN KEY (user_id)  REFERENCES Users(user_id)       ON DELETE RESTRICT,
     CONSTRAINT fk_res_table FOREIGN KEY (table_id) REFERENCES Game_Tables(table_id) ON DELETE RESTRICT,
     CONSTRAINT ck_res_window CHECK (end_time > start_time),
-    CONSTRAINT ck_res_no_midnight CHECK (DATE(start_time) = DATE(end_time)),
+    CONSTRAINT ck_res_no_midnight CHECK (
+        DATE(start_time) = DATE(end_time)
+        OR (DATEDIFF(end_time, start_time) = 1 AND TIME(end_time) = '00:00:00')
+    ),
     CONSTRAINT ck_res_frames CHECK (frames_played >= 0),
-    CONSTRAINT ck_res_total  CHECK (total_amount > 0),
+    CONSTRAINT ck_res_total  CHECK (total_amount >= 0),
     INDEX idx_res_table_time (table_id, start_time, end_time)
 ) ENGINE=InnoDB;
 

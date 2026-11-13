@@ -13,6 +13,7 @@ SELECT * FROM v_leaderboard ORDER BY rank_position;
 SELECT * FROM v_win_streaks;
 SELECT * FROM v_head_to_head;
 SELECT * FROM v_bracket_tree;
+SELECT * FROM v_specialization_anomalies;
 
 -- W3: Booking & Credit Ledger Balance
 SELECT * FROM v_member_balance;
