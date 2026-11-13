@@ -130,8 +130,8 @@ Complete each phase in order. The next phase begins only after the previous phas
 - [ ] **Privilege Test:** Verify `cueclub_api` user can execute procedures and select views, but direct table `INSERT`/`UPDATE`/`DELETE` are denied.
 
 #### Step 4.3: Interface freeze and documentation
-- [ ] **Freeze API Contract (`docs/API_CONTRACT.md`):** Document exact inputs, outputs, JSON formats, error messages, and SQLSTATE codes for all procedures (`sp_register_member`, `sp_register_casual`, `sp_book_table`, `sp_cancel_booking`, `sp_complete_match`) and views.
-- [ ] Capture expected outputs for presentation and API integration.
+- [x] **Freeze API Contract (`docs/API_CONTRACT.md`):** Document exact inputs, outputs, JSON formats, error messages, and SQLSTATE codes for all procedures (`sp_register_member`, `sp_register_casual`, `sp_book_table`, `sp_cancel_booking`, `sp_complete_match`) and views.
+- [x] Capture expected outputs for presentation and API integration.
 - [ ] Sign off view names, columns, and procedure contracts with Ananya and Ujjwal before Phase 5 starts.
 
 ### Phase 5 — Ananya: backend/API and D-01
