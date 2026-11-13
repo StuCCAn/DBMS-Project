@@ -154,19 +154,19 @@ SELECT u.user_id, u.name, u.user_type,
        'Invalid Level-2 Team Member attributes' AS anomaly_reason
   FROM Users u
   JOIN Club_Member cm ON cm.user_id = u.user_id
- WHERE cm.is_team_member = FALSE
-   AND (cm.team_role IS NOT NULL OR cm.selection_status IS NOT NULL OR cm.handedness IS NOT NULL)
+ WHERE (cm.is_team_member = FALSE AND (cm.team_role IS NOT NULL OR cm.selection_status IS NOT NULL OR cm.handedness IS NOT NULL))
+    OR (cm.is_team_member = TRUE  AND (cm.team_role IS NULL     OR cm.selection_status IS NULL     OR cm.handedness IS NULL))
 UNION ALL
 SELECT u.user_id, u.name, u.user_type,
        'Invalid Level-2 Individual Player attributes' AS anomaly_reason
   FROM Users u
   JOIN Club_Member cm ON cm.user_id = u.user_id
- WHERE cm.is_individual_player = FALSE
-   AND (cm.handicap IS NOT NULL OR cm.preferred_game IS NOT NULL)
+ WHERE (cm.is_individual_player = FALSE AND (cm.handicap IS NOT NULL OR cm.preferred_game IS NOT NULL))
+    OR (cm.is_individual_player = TRUE  AND (cm.handicap IS NULL     OR cm.preferred_game IS NULL))
 UNION ALL
 SELECT u.user_id, u.name, u.user_type,
        'Invalid Level-2 Enthusiast attributes' AS anomaly_reason
   FROM Users u
   JOIN Club_Member cm ON cm.user_id = u.user_id
- WHERE cm.is_enthusiast = FALSE
-   AND (cm.interest_type IS NOT NULL OR cm.wants_trial IS NOT NULL);
+ WHERE (cm.is_enthusiast = FALSE AND (cm.interest_type IS NOT NULL OR cm.wants_trial IS NOT NULL))
+    OR (cm.is_enthusiast = TRUE  AND (cm.interest_type IS NULL     OR cm.wants_trial IS NULL));
