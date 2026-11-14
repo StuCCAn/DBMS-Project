@@ -228,3 +228,280 @@ app.get("/api/leaderboard", authenticateToken, async (req, res) => {
         });
     }
 });
+app.get("/api/reports/win-streaks", authenticateToken, requireRole("Admin", "Staff"), async (req, res) => {
+    try {
+        const [rows] = await pool.query("SELECT * FROM v_win_streaks");
+
+        res.json({
+            status: "success",
+            data: rows
+        });
+    } catch (error) {
+        console.error("Failed to fetch win streaks:", error.message);
+        res.status(500).json({ error: "Internal server error" });
+    }
+});
+
+
+app.get("/api/reports/head-to-head", authenticateToken, requireRole("Admin", "Staff"), async (req, res) => {
+    try {
+        const [rows] = await pool.query("SELECT * FROM v_head_to_head");
+
+        res.json({
+            status: "success",
+            data: rows
+        });
+    } catch (error) {
+        console.error("Failed to fetch head-to-head report:", error.message);
+        res.status(500).json({ error: "Internal server error" });
+    }
+});
+
+
+app.get("/api/tournaments/:id/bracket", authenticateToken, async (req, res) => {
+    try {
+        const tournamentId = Number(req.params.id);
+
+        if (!Number.isInteger(tournamentId) || tournamentId <= 0) {
+            return res.status(400).json({ error: "Invalid tournament ID" });
+        }
+
+        const [rows] = await pool.query(
+            "SELECT * FROM v_bracket_tree WHERE tournament_id = ?",
+            [tournamentId]
+        );
+
+        res.json({
+            status: "success",
+            data: rows
+        });
+    } catch (error) {
+        console.error("Failed to fetch tournament bracket:", error.message);
+        res.status(500).json({ error: "Internal server error" });
+    }
+});
+
+
+app.get("/api/reports/table-utilisation", authenticateToken, requireRole("Admin", "Staff"), async (req, res) => {
+    try {
+        const [rows] = await pool.query("SELECT * FROM v_table_utilisation");
+
+        res.json({
+            status: "success",
+            data: rows
+        });
+    } catch (error) {
+        console.error("Failed to fetch table utilisation:", error.message);
+        res.status(500).json({ error: "Internal server error" });
+    }
+});
+
+
+app.get("/api/inventory/reorder-alerts", authenticateToken, requireRole("Admin", "Staff"), async (req, res) => {
+    try {
+        const [rows] = await pool.query("SELECT * FROM v_reorder_alerts");
+
+        res.json({
+            status: "success",
+            data: rows
+        });
+    } catch (error) {
+        console.error("Failed to fetch reorder alerts:", error.message);
+        res.status(500).json({ error: "Internal server error" });
+    }
+});
+
+
+app.get("/api/coaching/weaknesses", authenticateToken, async (req, res) => {
+    try {
+        const { playerId } = req.query;
+
+        if (req.user.app_role === "Casual") {
+            return res.status(403).json({ error: "Insufficient permissions" });
+        }
+
+        if (req.user.app_role === "Member") {
+            if (playerId && Number(playerId) !== Number(req.user.user_id)) {
+                return res.status(403).json({
+                    error: "Members can only view their own weaknesses"
+                });
+            }
+        }
+
+        let query = "SELECT * FROM v_player_weaknesses";
+        const params = [];
+
+        if (playerId) {
+            query += " WHERE player_id = ?";
+            params.push(playerId);
+        } else if (req.user.app_role === "Member") {
+            query += " WHERE player_id = ?";
+            params.push(req.user.user_id);
+        }
+
+        const [rows] = await pool.query(query, params);
+
+        res.json({
+            status: "success",
+            data: rows
+        });
+    } catch (error) {
+        console.error("Failed to fetch player weaknesses:", error.message);
+        res.status(500).json({ error: "Internal server error" });
+    }
+});
+
+
+app.get("/api/admin/diagnostics", authenticateToken, requireRole("Admin"), async (req, res) => {
+    try {
+        const [rows] = await pool.query(
+            "SELECT * FROM v_specialization_anomalies"
+        );
+
+        res.json({
+            status: "success",
+            data: rows
+        });
+    } catch (error) {
+        console.error("Failed to fetch diagnostics:", error.message);
+        res.status(500).json({ error: "Internal server error" });
+    }
+});
+
+
+app.get("/api/ledger/entries", authenticateToken, async (req, res) => {
+    try {
+        const { userId } = req.query;
+
+        if (req.user.app_role === "Casual") {
+            return res.status(403).json({ error: "Insufficient permissions" });
+        }
+
+        if (req.user.app_role === "Member") {
+            if (userId && Number(userId) !== Number(req.user.user_id)) {
+                return res.status(403).json({
+                    error: "Members can only view their own ledger"
+                });
+            }
+        }
+
+        let query = "SELECT * FROM v_credit_ledger_entries";
+        const params = [];
+
+        if (userId) {
+            query += " WHERE user_id = ?";
+            params.push(userId);
+        } else if (req.user.app_role === "Member") {
+            query += " WHERE user_id = ?";
+            params.push(req.user.user_id);
+        }
+
+        const [rows] = await pool.query(query, params);
+
+        res.json({
+            status: "success",
+            data: rows
+        });
+    } catch (error) {
+        console.error("Failed to fetch ledger entries:", error.message);
+        res.status(500).json({ error: "Internal server error" });
+    }
+});
+
+
+app.get("/api/tournaments", authenticateToken, async (req, res) => {
+    try {
+        const [rows] = await pool.query(
+            "SELECT * FROM v_tournaments_list"
+        );
+
+        res.json({
+            status: "success",
+            data: rows
+        });
+    } catch (error) {
+        console.error("Failed to fetch tournaments:", error.message);
+        res.status(500).json({ error: "Internal server error" });
+    }
+});
+
+
+app.get("/api/tournaments/:id/registrations", authenticateToken, async (req, res) => {
+    try {
+        const tournamentId = Number(req.params.id);
+
+        if (!Number.isInteger(tournamentId) || tournamentId <= 0) {
+            return res.status(400).json({ error: "Invalid tournament ID" });
+        }
+
+        const [rows] = await pool.query(
+            "SELECT * FROM v_tournament_registrations WHERE tournament_id = ?",
+            [tournamentId]
+        );
+
+        res.json({
+            status: "success",
+            data: rows
+        });
+    } catch (error) {
+        console.error("Failed to fetch tournament registrations:", error.message);
+        res.status(500).json({ error: "Internal server error" });
+    }
+});
+
+
+app.get("/api/inventory", authenticateToken, requireRole("Admin", "Staff"), async (req, res) => {
+    try {
+        const [rows] = await pool.query(
+            "SELECT * FROM v_inventory_catalog"
+        );
+
+        res.json({
+            status: "success",
+            data: rows
+        });
+    } catch (error) {
+        console.error("Failed to fetch inventory:", error.message);
+        res.status(500).json({ error: "Internal server error" });
+    }
+});
+
+
+app.get("/api/coaching/history", authenticateToken, async (req, res) => {
+    try {
+        const { playerId } = req.query;
+
+        if (req.user.app_role === "Casual") {
+            return res.status(403).json({ error: "Insufficient permissions" });
+        }
+
+        if (req.user.app_role === "Member") {
+            if (playerId && Number(playerId) !== Number(req.user.user_id)) {
+                return res.status(403).json({
+                    error: "Members can only view their own coaching history"
+                });
+            }
+        }
+
+        let query = "SELECT * FROM v_coaching_history";
+        const params = [];
+
+        if (playerId) {
+            query += " WHERE player_id = ?";
+            params.push(playerId);
+        } else if (req.user.app_role === "Member") {
+            query += " WHERE player_id = ?";
+            params.push(req.user.user_id);
+        }
+
+        const [rows] = await pool.query(query, params);
+
+        res.json({
+            status: "success",
+            data: rows
+        });
+    } catch (error) {
+        console.error("Failed to fetch coaching history:", error.message);
+        res.status(500).json({ error: "Internal server error" });
+    }
+});
