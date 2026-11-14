@@ -604,6 +604,282 @@ app.post("/api/tournaments/:id/register", authenticateToken, async (req, res) =>
         });
     }
 });
+app.post("/api/reservations", authenticateToken, async (req, res) => {
+    try {
+        const {
+            userId,
+            tableId,
+            start,
+            end,
+            mode,
+            frames,
+            payStatus
+        } = req.body;
+
+        if (req.user.app_role === "Casual") {
+            return res.status(403).json({
+                error: "Insufficient permissions"
+            });
+        }
+
+        const targetUserId = userId === undefined
+            ? Number(req.user.user_id)
+            : Number(userId);
+
+        if (
+            req.user.app_role === "Member" &&
+            targetUserId !== Number(req.user.user_id)
+        ) {
+            return res.status(403).json({
+                error: "Members can only book for themselves"
+            });
+        }
+
+        if (!tableId || !start || !end || !mode || frames === undefined || !payStatus) {
+            return res.status(400).json({
+                error: "tableId, start, end, mode, frames, and payStatus are required"
+            });
+        }
+
+        await pool.query(
+            "CALL sp_book_table(?, ?, ?, ?, ?, ?, ?, @p_reservation_id)",
+            [
+                targetUserId,
+                Number(tableId),
+                start,
+                end,
+                mode,
+                Number(frames),
+                payStatus
+            ]
+        );
+
+        const [rows] = await pool.query(
+            "SELECT @p_reservation_id AS reservation_id"
+        );
+
+        res.status(201).json({
+            status: "success",
+            data: {
+                reservation_id: rows[0].reservation_id
+            }
+        });
+    } catch (error) {
+        console.error("Failed to create reservation:", error.message);
+
+        res.status(error.sqlState === "45000" ? 400 : 500).json({
+            error: error.message
+        });
+    }
+});
+
+
+app.post("/api/reservations/:id/cancel", authenticateToken, async (req, res) => {
+    try {
+        const reservationId = Number(req.params.id);
+
+        if (!Number.isInteger(reservationId) || reservationId <= 0) {
+            return res.status(400).json({
+                error: "Invalid reservation ID"
+            });
+        }
+
+        if (req.user.app_role === "Casual") {
+            return res.status(403).json({
+                error: "Insufficient permissions"
+            });
+        }
+
+        if (req.user.app_role === "Member") {
+            const [rows] = await pool.query(
+                "SELECT user_id FROM v_reservations_all WHERE reservation_id = ?",
+                [reservationId]
+            );
+
+            if (!rows.length) {
+                return res.status(404).json({
+                    error: "Reservation not found"
+                });
+            }
+
+            if (Number(rows[0].user_id) !== Number(req.user.user_id)) {
+                return res.status(403).json({
+                    error: "Members can only cancel their own reservations"
+                });
+            }
+        }
+
+        await pool.query(
+            "CALL sp_cancel_booking(?, @p_refund_amount)",
+            [reservationId]
+        );
+
+        const [refundRows] = await pool.query(
+            "SELECT @p_refund_amount AS refund_amount"
+        );
+
+        res.json({
+            status: "success",
+            data: {
+                reservation_id: reservationId,
+                refund_amount: refundRows[0].refund_amount
+            }
+        });
+    } catch (error) {
+        console.error("Failed to cancel reservation:", error.message);
+
+        res.status(error.sqlState === "45000" ? 400 : 500).json({
+            error: error.message
+        });
+    }
+});
+
+
+app.patch("/api/tables/:id/status", authenticateToken, requireRole("Admin", "Staff"), async (req, res) => {
+    try {
+        const tableId = Number(req.params.id);
+        const { status } = req.body;
+
+        if (!Number.isInteger(tableId) || tableId <= 0) {
+            return res.status(400).json({
+                error: "Invalid table ID"
+            });
+        }
+
+        if (!status) {
+            return res.status(400).json({
+                error: "status is required"
+            });
+        }
+
+        await pool.query(
+            "CALL sp_set_table_status(?, ?)",
+            [tableId, status]
+        );
+
+        res.json({
+            status: "success",
+            data: {
+                table_id: tableId,
+                status
+            }
+        });
+    } catch (error) {
+        console.error("Failed to update table status:", error.message);
+
+        res.status(error.sqlState === "45000" ? 400 : 500).json({
+            error: error.message
+        });
+    }
+});
+
+
+app.post("/api/ledger/payment", authenticateToken, requireRole("Admin", "Staff"), async (req, res) => {
+    try {
+        const { userId, amount, note } = req.body;
+
+        if (!userId || amount === undefined) {
+            return res.status(400).json({
+                error: "userId and amount are required"
+            });
+        }
+
+        await pool.query(
+            "CALL sp_record_payment(?, ?, ?, @p_entry_id)",
+            [
+                Number(userId),
+                Number(amount),
+                note || null
+            ]
+        );
+
+        const [rows] = await pool.query(
+            "SELECT @p_entry_id AS entry_id"
+        );
+
+        res.status(201).json({
+            status: "success",
+            data: {
+                entry_id: rows[0].entry_id
+            }
+        });
+    } catch (error) {
+        console.error("Failed to record payment:", error.message);
+
+        let statusCode = 400;
+
+        if (
+            error.sqlState !== "45000" &&
+            error.sqlState !== "23000"
+        ) {
+            statusCode = 500;
+        }
+
+        if (
+            error.sqlState === "45000" &&
+            error.message.includes("registered club members")
+        ) {
+            statusCode = 403;
+        }
+
+        res.status(statusCode).json({
+            error: error.message
+        });
+    }
+});
+
+
+app.post("/api/ledger/charge", authenticateToken, requireRole("Admin", "Staff"), async (req, res) => {
+    try {
+        const { userId, type, amount, note } = req.body;
+
+        if (!userId || !type || amount === undefined) {
+            return res.status(400).json({
+                error: "userId, type, and amount are required"
+            });
+        }
+
+        await pool.query(
+            "CALL sp_record_charge(?, ?, ?, ?, @p_entry_id)",
+            [
+                Number(userId),
+                type,
+                Number(amount),
+                note || null
+            ]
+        );
+
+        const [rows] = await pool.query(
+            "SELECT @p_entry_id AS entry_id"
+        );
+
+        res.status(201).json({
+            status: "success",
+            data: {
+                entry_id: rows[0].entry_id
+            }
+        });
+    } catch (error) {
+        console.error("Failed to record charge:", error.message);
+
+        let statusCode = 400;
+
+        if (error.sqlState !== "45000") {
+            statusCode = 500;
+        }
+
+        if (
+            error.sqlState === "45000" &&
+            error.message.includes("registered club members")
+        ) {
+            statusCode = 403;
+        }
+
+        res.status(statusCode).json({
+            error: error.message
+        });
+    }
+});
 app.get("/api/inventory", authenticateToken, requireRole("Admin", "Staff"), async (req, res) => {
     try {
         const [rows] = await pool.query(
