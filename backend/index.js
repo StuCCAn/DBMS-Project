@@ -26,9 +26,7 @@ app.get("/api/health", async (req, res) => {
     }
 });
 
-app.listen(PORT, () => {
-    console.log(`CueClub API running on port ${PORT}`);
-});
+
 app.post("/api/auth/login", async (req, res) => {
     try {
         const { email, password } = req.body;
@@ -407,7 +405,184 @@ app.get("/api/ledger/entries", authenticateToken, async (req, res) => {
         res.status(500).json({ error: "Internal server error" });
     }
 });
+app.put("/api/users/:id/password", authenticateToken, async (req, res) => {
+    try {
+        const targetUserId = Number(req.params.id);
+        const { passwordHash } = req.body;
 
+        if (!Number.isInteger(targetUserId) || targetUserId <= 0) {
+            return res.status(400).json({
+                error: "Invalid user ID"
+            });
+        }
+
+        if (!passwordHash) {
+            return res.status(400).json({
+                error: "passwordHash is required"
+            });
+        }
+
+        if (
+            req.user.app_role !== "Admin" &&
+            Number(req.user.user_id) !== targetUserId
+        ) {
+            return res.status(403).json({
+                error: "You can only change your own password"
+            });
+        }
+
+        await pool.query(
+            "CALL sp_set_password(?, ?)",
+            [targetUserId, passwordHash]
+        );
+
+        res.json({
+            status: "success",
+            data: {
+                user_id: targetUserId
+            }
+        });
+    } catch (error) {
+        console.error("Failed to set password:", error.message);
+
+        let statusCode = 400;
+
+        if (error.message.includes("User not found")) {
+            statusCode = 404;
+        }
+
+        res.status(statusCode).json({
+            error: error.message
+        });
+    }
+});
+
+
+app.post("/api/matches/:id/complete", authenticateToken, requireRole("Admin", "Staff"), async (req, res) => {
+    try {
+        const matchId = Number(req.params.id);
+        const { frames, winPoints, lossPoints } = req.body;
+
+        if (!Number.isInteger(matchId) || matchId <= 0) {
+            return res.status(400).json({
+                error: "Invalid match ID"
+            });
+        }
+
+        if (!Array.isArray(frames)) {
+            return res.status(400).json({
+                error: "frames must be an array"
+            });
+        }
+
+        if (winPoints === undefined || lossPoints === undefined) {
+            return res.status(400).json({
+                error: "winPoints and lossPoints are required"
+            });
+        }
+
+        await pool.query(
+            "CALL sp_complete_match(?, ?, ?, ?)",
+            [
+                matchId,
+                JSON.stringify(frames),
+                Number(winPoints),
+                Number(lossPoints)
+            ]
+        );
+
+        res.json({
+            status: "success",
+            data: {
+                match_id: matchId
+            }
+        });
+    } catch (error) {
+        console.error("Failed to complete match:", error.message);
+
+        res.status(error.sqlState === "45000" ? 400 : 500).json({
+            error: error.message
+        });
+    }
+});
+
+
+app.patch("/api/inventory/:id/stock", authenticateToken, requireRole("Admin", "Staff"), async (req, res) => {
+    try {
+        const itemId = Number(req.params.id);
+        const { delta } = req.body;
+
+        if (!Number.isInteger(itemId) || itemId <= 0) {
+            return res.status(400).json({
+                error: "Invalid inventory item ID"
+            });
+        }
+
+        if (delta === undefined) {
+            return res.status(400).json({
+                error: "delta is required"
+            });
+        }
+
+        await pool.query(
+            "CALL sp_update_inventory_stock(?, ?)",
+            [itemId, Number(delta)]
+        );
+
+        res.json({
+            status: "success",
+            data: {
+                item_id: itemId,
+                delta: Number(delta)
+            }
+        });
+    } catch (error) {
+        console.error("Failed to update inventory stock:", error.message);
+
+        res.status(error.sqlState === "45000" ? 400 : 500).json({
+            error: error.message
+        });
+    }
+});
+
+
+app.patch("/api/inventory/:id/condition", authenticateToken, requireRole("Admin", "Staff"), async (req, res) => {
+    try {
+        const itemId = Number(req.params.id);
+        const { status } = req.body;
+
+        if (!Number.isInteger(itemId) || itemId <= 0) {
+            return res.status(400).json({
+                error: "Invalid inventory item ID"
+            });
+        }
+
+        if (!status) {
+            return res.status(400).json({
+                error: "status is required"
+            });
+        }
+
+        await pool.query(
+            "CALL sp_set_inventory_condition(?, ?)",
+            [itemId, status]
+        );
+
+        res.json({
+            status: "success",
+            data: {
+                item_id: itemId,
+                status
+            }
+        });
+    } catch (error) {
+        console.error("Failed to update inventory condition:", error.message);
+
+        res.status(error.sqlState === "45000" ? 400 : 500).json({
+            error: error.message
+        });
+    }
+});
 
 app.get("/api/tournaments", authenticateToken, async (req, res) => {
     try {
@@ -934,4 +1109,9 @@ app.get("/api/coaching/history", authenticateToken, async (req, res) => {
         console.error("Failed to fetch coaching history:", error.message);
         res.status(500).json({ error: "Internal server error" });
     }
+});
+
+
+app.listen(PORT, () => {
+    console.log(`CueClub API running on port ${PORT}`);
 });
