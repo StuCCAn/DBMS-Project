@@ -449,7 +449,161 @@ app.get("/api/tournaments/:id/registrations", authenticateToken, async (req, res
     }
 });
 
+app.post("/api/tournaments", authenticateToken, requireRole("Admin", "Staff"), async (req, res) => {
+    try {
+        const { title, game, format, start, fee } = req.body;
 
+        if (!title || !game || !format || !start || fee === undefined) {
+            return res.status(400).json({
+                error: "title, game, format, start, and fee are required"
+            });
+        }
+
+        const [result] = await pool.query(
+            "CALL sp_create_tournament(?, ?, ?, ?, ?, @p_tournament_id)",
+            [title, game, format, start, fee]
+        );
+
+        const [idRows] = await pool.query(
+            "SELECT @p_tournament_id AS tournament_id"
+        );
+
+        res.status(201).json({
+            status: "success",
+            data: {
+                tournament_id: idRows[0].tournament_id
+            }
+        });
+    } catch (error) {
+        console.error("Failed to create tournament:", error.message);
+
+        const status = error.sqlState === "45000" ? 400 : 500;
+
+        res.status(status).json({
+            error: error.message
+        });
+    }
+});
+
+
+app.patch("/api/tournaments/:id/status", authenticateToken, requireRole("Admin", "Staff"), async (req, res) => {
+    try {
+        const tournamentId = Number(req.params.id);
+        const { status } = req.body;
+
+        if (!Number.isInteger(tournamentId) || tournamentId <= 0) {
+            return res.status(400).json({
+                error: "Invalid tournament ID"
+            });
+        }
+
+        if (!status) {
+            return res.status(400).json({
+                error: "status is required"
+            });
+        }
+
+        await pool.query(
+            "CALL sp_set_tournament_status(?, ?)",
+            [tournamentId, status]
+        );
+
+        res.json({
+            status: "success",
+            data: {
+                tournament_id: tournamentId,
+                status
+            }
+        });
+    } catch (error) {
+        console.error("Failed to update tournament status:", error.message);
+
+        const statusCode = error.sqlState === "45000" ? 400 : 500;
+
+        res.status(statusCode).json({
+            error: error.message
+        });
+    }
+});
+
+
+app.post("/api/tournaments/:id/register", authenticateToken, async (req, res) => {
+    try {
+        const tournamentId = Number(req.params.id);
+        const { userId, seed, feePaid } = req.body;
+
+        if (!Number.isInteger(tournamentId) || tournamentId <= 0) {
+            return res.status(400).json({
+                error: "Invalid tournament ID"
+            });
+        }
+
+        if (req.user.app_role === "Casual") {
+            return res.status(403).json({
+                error: "Insufficient permissions"
+            });
+        }
+
+        const targetUserId = userId === undefined
+            ? Number(req.user.user_id)
+            : Number(userId);
+
+        if (!Number.isInteger(targetUserId) || targetUserId <= 0) {
+            return res.status(400).json({
+                error: "Invalid user ID"
+            });
+        }
+
+        if (
+            req.user.app_role === "Member" &&
+            targetUserId !== Number(req.user.user_id)
+        ) {
+            return res.status(403).json({
+                error: "Members can only register themselves"
+            });
+        }
+
+        if (feePaid === undefined) {
+            return res.status(400).json({
+                error: "feePaid is required"
+            });
+        }
+
+        await pool.query(
+            "CALL sp_register_tournament_player(?, ?, ?, ?)",
+            [
+                tournamentId,
+                targetUserId,
+                seed === undefined ? null : seed,
+                feePaid
+            ]
+        );
+
+        res.status(201).json({
+            status: "success",
+            data: {
+                tournament_id: tournamentId,
+                user_id: targetUserId,
+                seed: seed === undefined ? null : seed,
+                fee_paid: feePaid
+            }
+        });
+    } catch (error) {
+        console.error("Failed to register tournament player:", error.message);
+
+        let statusCode = 500;
+
+        if (error.sqlState === "23000") {
+            statusCode = 409;
+        } else if (error.sqlState === "45000") {
+            statusCode = 409;
+        }
+
+        res.status(statusCode).json({
+            error: error.message
+        });
+    }
+});
 app.get("/api/inventory", authenticateToken, requireRole("Admin", "Staff"), async (req, res) => {
     try {
         const [rows] = await pool.query(
