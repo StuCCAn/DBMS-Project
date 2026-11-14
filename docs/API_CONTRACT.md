@@ -14,11 +14,11 @@ The CueClub relational database encapsulates core business invariants, credit ac
 ### Contract Guarantees
 1. **Zero Direct Table Writes:** The backend application MUST connect via the least-privilege `cueclub_api` account. Direct `INSERT`, `UPDATE`, or `DELETE` on raw tables is denied at the database privilege level.
 2. **Encapsulated State Mutation:** All mutations are executed via authoritative stored procedures:
-   - **Authentication:** `sp_get_login`
+   - **Authentication & Security:** `sp_get_login`, `sp_set_password`
    - **Member & Casual Registration:** `sp_register_member`, `sp_register_casual`
    - **Bookings & Lifecycle:** `sp_book_table`, `sp_cancel_booking`
    - **Credit Ledger:** `sp_record_payment`, `sp_record_charge`
-   - **Tournaments & Matches:** `sp_create_tournament`, `sp_register_tournament_player`, `sp_complete_match`
+   - **Tournaments & Matches:** `sp_create_tournament`, `sp_set_tournament_status`, `sp_register_tournament_player`, `sp_complete_match`
    - **Facilities & Equipment:** `sp_set_table_status`, `sp_update_inventory_stock`, `sp_set_inventory_condition`
    - **Coaching & Player Lifecycle:** `sp_record_assessment`, `sp_deactivate_user`
 3. **Atomic Operations:** Stored procedures manage their own transactions (`START TRANSACTION` ... `COMMIT`). In case of validation or constraint failure, procedures roll back automatically and return a formatted `SIGNAL SQLSTATE '45000'` with a descriptive error message.
@@ -477,7 +477,7 @@ CALL sp_record_assessment(
 | Parameter | Type | Required | Description / Constraints |
 |---|---|---|---|
 | `p_player_id` | `INT` | Yes | Evaluated player ID. Must be a Team Member or Individual Player. |
-| `p_assessed_by` | `INT` | Yes | Coach / Assessor user ID (`assessed_by != player_id`). |
+| `p_assessed_by` | `INT` | Yes | Coach / Assessor user ID (`assessed_by != player_id`). Must reference an active user with role `Admin`, `Staff`, or `Member` (`is_active = TRUE`). |
 | `p_skill` | `VARCHAR(30)` | Yes | Allowed: `'Long potting'`, `'Safety play'`, `'Break building'`, `'Positional play'`, `'Cue ball control'`, `'Pressure handling'`. |
 | `p_rating` | `INT` | Yes | Skill score between `1` and `10`. |
 | `p_notes` | `VARCHAR(300)` | No | Qualitative feedback remarks. |
@@ -485,6 +485,15 @@ CALL sp_record_assessment(
 #### REST API Mapping
 * **Endpoint:** `POST /api/coaching/assessments`
 * **RBAC:** `Admin`, `Staff`
+
+#### Error Signals & SQLSTATE Codes
+| SQLSTATE | Procedure / Trigger | Error Message | HTTP Code |
+|---|---|---|---|
+| `45000` | `sp_record_assessment` | `Invalid skill area: must match allowed assessment categories` | `400 Bad Request` |
+| `45000` | `sp_record_assessment` | `Rating must be between 1 and 10` | `400 Bad Request` |
+| `45000` | `sp_record_assessment` | `Player cannot assess themselves` | `400 Bad Request` |
+| `45000` | `sp_record_assessment` | `Assessing coach not found or inactive` | `404 Not Found` / `403 Forbidden` |
+| `45000` | `trg_assessment_bi` | `Only team members or individual players can be assessed` | `400 Bad Request` |
 
 ---
 
@@ -549,6 +558,67 @@ CALL sp_deactivate_user(
 #### REST API Mapping
 * **Endpoint:** `PATCH /api/users/:id/deactivate`
 * **RBAC:** `Admin`
+
+---
+
+### 2.16 `sp_set_password`
+
+Authoritatively sets or resets the cryptographic `password_hash` for a user in the `Users` relation.
+
+#### Signature
+```sql
+CALL sp_set_password(
+    IN p_user_id       INT,
+    IN p_password_hash VARCHAR(255)
+);
+```
+
+#### Parameters
+| Parameter | Type | Required | Description / Constraints |
+|---|---|---|---|
+| `p_user_id` | `INT` | Yes | Target user ID. Must reference an existing record in `Users`. |
+| `p_password_hash` | `VARCHAR(255)` | Yes | Non-empty hashed password string (e.g. standard bcrypt). |
+
+#### REST API Mapping
+* **Endpoint:** `PUT /api/users/:id/password`
+* **RBAC:** `Admin`, or authenticated user changing their own password (`user_id = req.user.userId`)
+
+#### Error Signals & SQLSTATE Codes
+| SQLSTATE | Procedure / Trigger | Error Message | HTTP Code |
+|---|---|---|---|
+| `45000` | `sp_set_password` | `User ID is required` | `400 Bad Request` |
+| `45000` | `sp_set_password` | `Password hash cannot be empty` | `400 Bad Request` |
+| `45000` | `sp_set_password` | `User not found` | `404 Not Found` |
+
+---
+
+### 2.17 `sp_set_tournament_status`
+
+Authoritatively updates the lifecycle status of a tournament, validating transitions against the canonical schema ENUM.
+
+#### Signature
+```sql
+CALL sp_set_tournament_status(
+    IN p_tournament_id INT,
+    IN p_status        VARCHAR(20)    -- 'Draft', 'Registration', 'Ongoing', 'Completed', 'Cancelled'
+);
+```
+
+#### Parameters
+| Parameter | Type | Required | Description / Constraints |
+|---|---|---|---|
+| `p_tournament_id` | `INT` | Yes | Target tournament ID. Must exist in `Tournaments`. |
+| `p_status` | `VARCHAR(20)` | Yes | Must match `Tournaments.status` ENUM: `'Draft'`, `'Registration'`, `'Ongoing'`, `'Completed'`, `'Cancelled'`. |
+
+#### REST API Mapping
+* **Endpoint:** `PATCH /api/tournaments/:id/status`
+* **RBAC:** `Admin`, `Staff`
+
+#### Error Signals & SQLSTATE Codes
+| SQLSTATE | Procedure / Trigger | Error Message | HTTP Code |
+|---|---|---|---|
+| `45000` | `sp_set_tournament_status` | `Invalid tournament status: must be Draft, Registration, Ongoing, Completed, or Cancelled` | `400 Bad Request` |
+| `45000` | `sp_set_tournament_status` | `Tournament not found` | `404 Not Found` |
 
 ---
 
@@ -617,6 +687,7 @@ Exposes longitudinal coaching evaluation history.
 | Endpoint / Operation | Procedure / View Called | Admin | Staff | Member | Casual |
 |---|---|:---:|:---:|:---:|:---:|
 | `POST /api/auth/login` | `sp_get_login` | ✅ | ✅ | ✅ | ✅ |
+| `PUT /api/users/:id/password` | `sp_set_password` | ✅ | ✅ (Own) | ✅ (Own) | ✅ (Own) |
 | `POST /api/members` | `sp_register_member` | ✅ | ✅ | ❌ | ❌ |
 | `POST /api/casuals` | `sp_register_casual` | ✅ | ✅ | ❌ | ❌ |
 | `POST /api/reservations` | `sp_book_table` | ✅ | ✅ | ✅ (Own) | ❌ |
@@ -629,6 +700,7 @@ Exposes longitudinal coaching evaluation history.
 | `GET /api/ledger/entries` | `v_credit_ledger_entries` | ✅ | ✅ | ✅ (Own) | ❌ |
 | `GET /api/members/:id/balance` | `v_member_balance` | ✅ | ✅ | ✅ (Own) | ❌ |
 | `POST /api/tournaments` | `sp_create_tournament` | ✅ | ✅ | ❌ | ❌ |
+| `PATCH /api/tournaments/:id/status` | `sp_set_tournament_status` | ✅ | ✅ | ❌ | ❌ |
 | `GET /api/tournaments` | `v_tournaments_list` | ✅ | ✅ | ✅ | ✅ |
 | `POST /api/tournaments/:id/register`| `sp_register_tournament_player` | ✅ | ✅ | ✅ (Own) | ❌ |
 | `GET /api/tournaments/:id/registrations`| `v_tournament_registrations` | ✅ | ✅ | ✅ | ✅ |
