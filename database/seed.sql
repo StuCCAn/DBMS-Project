@@ -19,16 +19,17 @@ DELETE FROM Users;
 SET FOREIGN_KEY_CHECKS = 1;
 
 -- 1. Users: 1-4 and 7-8 are Club Members; 5-6 and 9 are Casual Players
-INSERT INTO Users (user_id, name, phone, email, joined_on, user_type, ranking_points, is_active, app_role) VALUES
- (1, 'Rohan Mehta',   '9000000001', 'rohan@example.com',  '2025-01-10', 'Member', 1200, TRUE,  'Admin'),
- (2, 'Imran Sheikh',  '9000000002', 'imran@example.com',  '2025-02-14', 'Member', 1150, TRUE,  'Staff'),
- (3, 'Aarav Nair',    '9000000003', 'aarav@example.com',  '2025-03-01', 'Member', 1100, TRUE,  'Member'),
- (4, 'Kabir Rao',     '9000000004', 'kabir@example.com',  '2025-06-20', 'Member', 1050, TRUE,  'Member'),
- (5, 'Vikram Singh',  '9000000005', 'vikram@example.com', '2026-09-30', 'Casual',    0, TRUE,  'Casual'),
- (6, 'Sahil Verma',   '9000000006', 'sahil@example.com',  '2026-10-05', 'Casual',    0, TRUE,  'Casual'),
- (7, 'Neel Kapoor',   '9000000007', 'neel@example.com',   '2026-08-15', 'Member',  950, TRUE,  'Member'),
- (8, 'Vihaan Tongia', '9000000008', 'vihaan@example.com', '2025-05-01', 'Member',  900, TRUE,  'Member'),
- (9, 'Arjun Old',     '9000000009', 'arjun@example.com',  '2025-04-10', 'Casual',    0, FALSE, 'Casual');
+--    password_hash is seeded with standard bcrypt hash for 'cueclub_default'
+INSERT INTO Users (user_id, name, phone, email, joined_on, user_type, ranking_points, is_active, app_role, password_hash) VALUES
+ (1, 'Rohan Mehta',   '9000000001', 'rohan@example.com',  '2025-01-10', 'Member', 1200, TRUE,  'Admin',  '$2b$12$e8vBwO5F0fR.vP0NlK7F7.mK3rA6G1y0y7Xl8Q5f9gR0e3g5h8y1K'),
+ (2, 'Imran Sheikh',  '9000000002', 'imran@example.com',  '2025-02-14', 'Member', 1150, TRUE,  'Staff',  '$2b$12$e8vBwO5F0fR.vP0NlK7F7.mK3rA6G1y0y7Xl8Q5f9gR0e3g5h8y1K'),
+ (3, 'Aarav Nair',    '9000000003', 'aarav@example.com',  '2025-03-01', 'Member', 1100, TRUE,  'Member', '$2b$12$e8vBwO5F0fR.vP0NlK7F7.mK3rA6G1y0y7Xl8Q5f9gR0e3g5h8y1K'),
+ (4, 'Kabir Rao',     '9000000004', 'kabir@example.com',  '2025-06-20', 'Member', 1050, TRUE,  'Member', '$2b$12$e8vBwO5F0fR.vP0NlK7F7.mK3rA6G1y0y7Xl8Q5f9gR0e3g5h8y1K'),
+ (5, 'Vikram Singh',  '9000000005', 'vikram@example.com', '2026-09-30', 'Casual',    0, TRUE,  'Casual', '$2b$12$e8vBwO5F0fR.vP0NlK7F7.mK3rA6G1y0y7Xl8Q5f9gR0e3g5h8y1K'),
+ (6, 'Sahil Verma',   '9000000006', 'sahil@example.com',  '2026-10-05', 'Casual',    0, TRUE,  'Casual', '$2b$12$e8vBwO5F0fR.vP0NlK7F7.mK3rA6G1y0y7Xl8Q5f9gR0e3g5h8y1K'),
+ (7, 'Neel Kapoor',   '9000000007', 'neel@example.com',   '2026-08-15', 'Member',  950, TRUE,  'Member', '$2b$12$e8vBwO5F0fR.vP0NlK7F7.mK3rA6G1y0y7Xl8Q5f9gR0e3g5h8y1K'),
+ (8, 'Vihaan Tongia', '9000000008', 'vihaan@example.com', '2025-05-01', 'Member',  900, TRUE,  'Member', '$2b$12$e8vBwO5F0fR.vP0NlK7F7.mK3rA6G1y0y7Xl8Q5f9gR0e3g5h8y1K'),
+ (9, 'Arjun Old',     '9000000009', 'arjun@example.com',  '2025-04-10', 'Casual',    0, FALSE, 'Casual', '$2b$12$e8vBwO5F0fR.vP0NlK7F7.mK3rA6G1y0y7Xl8Q5f9gR0e3g5h8y1K');
 
 -- 2. Club_Member: Members 1, 2, 3, 4, 7 have non-expired dates through 2027.
 --    Member 8 has an expired membership ('2026-09-01') to test expiry restrictions.

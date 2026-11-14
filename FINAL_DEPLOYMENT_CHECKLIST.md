@@ -44,7 +44,7 @@ The mid-semester report and its repository, `https://github.com/StuCCAn/DBMS-Pro
 |---|---|---|
 | Schema, report alignment, and normalization | Priyansh Thadhani | ☑ |
 | Constraints, triggers, and transaction validation | Goru Nikhil | ☑ |
-| Views, reports, dataset, and DB contract freeze for API | Manya Bhateja | ☐ |
+| Views, reports, dataset, and DB contract freeze for API | Manya Bhateja | ☑ |
 | Backend/API and authentication deviation D-01 | Ananya Avunooru | ☐ |
 | Frontend, documentation, integration, and presentation | Ujjwal Chandak | ☐ |
 
@@ -121,13 +121,13 @@ Complete each phase in order. The next phase begins only after the previous phas
 
 #### Step 4.2: Comprehensive constraint and lifecycle tests (`database/constraint_tests.sql`)
 - [x] **Re-runnable Test Harness:** Clean up temporary test fixtures (e.g., Tournament 2) upon completion so `sp_run_constraint_tests()` can be executed repeatedly on a live database without crashing on duplicate keys.
-- [ ] **Cancellation Tests:** Test cancel before start, cancel after start, cancel already-paid booking, duplicate cancel (idempotency), verify ledger refund balance, verify that cancelling a non-credit booking (`Pending` or cash-`Paid`) posts zero ledger entries, and verify that cancelling an `OnCredit` booking whose balance is already paid down caps the refund at outstanding balance without tripping the overpayment trigger.
-- [ ] **Match Hardening Tests:** Test rejection of cancelled-match completion and rejection of NULL ranking inputs.
-- [ ] **Boundary Tests:** Test a booking ending exactly at `00:00:00` and a 100% discount booking (`total_amount = 0.00`).
-- [ ] **Lifecycle Settlement Test:** Test updating `payment_status` to `'Paid'` on a historical reservation where the table is in maintenance and membership is expired.
-- [ ] **R9 Historical Delete Test:** Assert `trg_users_bd` rejects physical deletion of users with historical records.
-- [ ] **Credit-Limit Concurrency Test:** Execute a two-session test demonstrating that concurrent bookings against a shared credit limit prevent overbooking.
-- [ ] **Privilege Test:** Verify `cueclub_api` user can execute procedures and select views, but direct table `INSERT`/`UPDATE`/`DELETE` are denied.
+- [x] **Cancellation Tests:** Test cancel before start, cancel after start, cancel already-paid booking, duplicate cancel (idempotency), verify ledger refund balance, verify that cancelling a non-credit booking (`Pending` or cash-`Paid`) posts zero ledger entries, and verify that cancelling an `OnCredit` booking whose balance is already paid down caps the refund at outstanding balance without tripping the overpayment trigger.
+- [x] **Match Hardening Tests:** Test rejection of cancelled-match completion and rejection of NULL ranking inputs.
+- [x] **Boundary Tests:** Test a booking ending exactly at `00:00:00` and a 100% discount booking (`total_amount = 0.00`).
+- [x] **Lifecycle Settlement Test:** Test updating `payment_status` to `'Paid'` on a historical reservation where the table is in maintenance and membership is expired.
+- [x] **R9 Historical Delete Test:** Assert `trg_users_bd` rejects physical deletion of users with historical records.
+- [x] **Credit-Limit Concurrency Test:** Execute a two-session test demonstrating that concurrent bookings against a shared credit limit prevent overbooking.
+- [x] **Privilege Test:** Verify `cueclub_api` user can execute procedures and select views, but direct table `INSERT`/`UPDATE`/`DELETE` are denied.
 
 #### Step 4.3: Interface freeze and documentation
 - [x] **Freeze API Contract (`docs/API_CONTRACT.md`):** Document exact inputs, outputs, JSON formats, error messages, and SQLSTATE codes for all procedures (`sp_register_member`, `sp_register_casual`, `sp_book_table`, `sp_cancel_booking`, `sp_complete_match`) and views.
