@@ -60,9 +60,10 @@ GRANT SELECT ON cueclub.v_inventory_catalog TO 'cueclub_api'@'%';
 GRANT SELECT ON cueclub.v_coaching_history TO 'cueclub_api'@'%';
 
 -- ----------------------------------------------------------------------------
--- 2. Grant EXECUTE on all 15 Stored Procedures (Authentication + Writes)
+-- 2. Grant EXECUTE on all 17 Stored Procedures (Authentication + Writes)
 -- ----------------------------------------------------------------------------
 GRANT EXECUTE ON PROCEDURE cueclub.sp_get_login TO 'cueclub_api'@'%';
+GRANT EXECUTE ON PROCEDURE cueclub.sp_set_password TO 'cueclub_api'@'%';
 GRANT EXECUTE ON PROCEDURE cueclub.sp_register_member TO 'cueclub_api'@'%';
 GRANT EXECUTE ON PROCEDURE cueclub.sp_register_casual TO 'cueclub_api'@'%';
 GRANT EXECUTE ON PROCEDURE cueclub.sp_book_table TO 'cueclub_api'@'%';
@@ -71,6 +72,7 @@ GRANT EXECUTE ON PROCEDURE cueclub.sp_complete_match TO 'cueclub_api'@'%';
 GRANT EXECUTE ON PROCEDURE cueclub.sp_record_payment TO 'cueclub_api'@'%';
 GRANT EXECUTE ON PROCEDURE cueclub.sp_record_charge TO 'cueclub_api'@'%';
 GRANT EXECUTE ON PROCEDURE cueclub.sp_create_tournament TO 'cueclub_api'@'%';
+GRANT EXECUTE ON PROCEDURE cueclub.sp_set_tournament_status TO 'cueclub_api'@'%';
 GRANT EXECUTE ON PROCEDURE cueclub.sp_register_tournament_player TO 'cueclub_api'@'%';
 GRANT EXECUTE ON PROCEDURE cueclub.sp_set_table_status TO 'cueclub_api'@'%';
 GRANT EXECUTE ON PROCEDURE cueclub.sp_record_assessment TO 'cueclub_api'@'%';

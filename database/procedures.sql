@@ -20,6 +20,8 @@ DROP PROCEDURE IF EXISTS sp_record_assessment;
 DROP PROCEDURE IF EXISTS sp_update_inventory_stock;
 DROP PROCEDURE IF EXISTS sp_set_inventory_condition;
 DROP PROCEDURE IF EXISTS sp_deactivate_user;
+DROP PROCEDURE IF EXISTS sp_set_password;
+DROP PROCEDURE IF EXISTS sp_set_tournament_status;
 
 DELIMITER $$
 
@@ -466,7 +468,8 @@ END$$
 
 -- ---------------------------------------------------------------
 -- 11. Coaching Assessments: Record Assessment
---     Checks allowed skill areas, rating (1-10), player != coach.
+--     Checks allowed skill areas, rating (1-10), player != coach,
+--     and that coach exists as a valid active coach/staff/member.
 -- ---------------------------------------------------------------
 CREATE PROCEDURE sp_record_assessment(
     IN p_player_id INT,
@@ -488,6 +491,15 @@ BEGIN
 
     IF p_player_id = p_assessed_by THEN
         SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Player cannot assess themselves';
+    END IF;
+
+    IF p_assessed_by IS NULL OR NOT EXISTS (
+        SELECT 1 FROM Users
+         WHERE user_id = p_assessed_by
+           AND is_active = TRUE
+           AND (app_role IN ('Admin', 'Staff') OR user_type = 'Member')
+    ) THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Assessing coach not found or inactive';
     END IF;
 
     START TRANSACTION;
@@ -578,6 +590,62 @@ BEGIN
         IF v_active = TRUE THEN
             UPDATE Users SET is_active = FALSE WHERE user_id = p_user_id;
         END IF;
+    COMMIT;
+END$$
+
+-- ---------------------------------------------------------------
+-- 15. User Lifecycle / Security: Set Password
+--     Updates password_hash for a given user.
+-- ---------------------------------------------------------------
+CREATE PROCEDURE sp_set_password(
+    IN p_user_id INT,
+    IN p_password_hash VARCHAR(255)
+)
+BEGIN
+    DECLARE EXIT HANDLER FOR SQLEXCEPTION BEGIN ROLLBACK; RESIGNAL; END;
+
+    IF p_user_id IS NULL THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'User ID is required';
+    END IF;
+
+    IF p_password_hash IS NULL OR TRIM(p_password_hash) = '' THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Password hash cannot be empty';
+    END IF;
+
+    START TRANSACTION;
+        IF NOT EXISTS (SELECT 1 FROM Users WHERE user_id = p_user_id) THEN
+            SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'User not found';
+        END IF;
+
+        UPDATE Users
+           SET password_hash = p_password_hash
+         WHERE user_id = p_user_id;
+    COMMIT;
+END$$
+
+-- ---------------------------------------------------------------
+-- 16. Tournament Management: Set Tournament Status
+--     Allowed values: 'Draft', 'Registration', 'Ongoing', 'Completed', 'Cancelled'.
+-- ---------------------------------------------------------------
+CREATE PROCEDURE sp_set_tournament_status(
+    IN p_tournament_id INT,
+    IN p_status VARCHAR(20)
+)
+BEGIN
+    DECLARE EXIT HANDLER FOR SQLEXCEPTION BEGIN ROLLBACK; RESIGNAL; END;
+
+    IF p_status NOT IN ('Draft', 'Registration', 'Ongoing', 'Completed', 'Cancelled') THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Invalid tournament status: must be Draft, Registration, Ongoing, Completed, or Cancelled';
+    END IF;
+
+    START TRANSACTION;
+        IF NOT EXISTS (SELECT 1 FROM Tournaments WHERE tournament_id = p_tournament_id) THEN
+            SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Tournament not found';
+        END IF;
+
+        UPDATE Tournaments
+           SET status = p_status
+         WHERE tournament_id = p_tournament_id;
     COMMIT;
 END$$
 
