@@ -160,3 +160,53 @@ app.get("/api/tables", authenticateToken, async (req, res) => {
         });
     }
 });
+app.get(
+    "/api/reservations",
+    authenticateToken,
+    requireRole("Admin", "Staff", "Member"),
+    async (req, res) => {
+        try {
+            const { userId, tableId, status } = req.query;
+
+            let query = "SELECT * FROM v_reservations_all WHERE 1=1";
+            const params = [];
+
+            if (req.user.app_role === "Member") {
+                if (userId && Number(userId) !== Number(req.user.user_id)) {
+                    return res.status(403).json({
+                        error: "Members can only view their own reservations"
+                    });
+                }
+
+                query += " AND user_id = ?";
+                params.push(req.user.user_id);
+            } else if (userId) {
+                query += " AND user_id = ?";
+                params.push(userId);
+            }
+
+            if (tableId) {
+                query += " AND table_id = ?";
+                params.push(tableId);
+            }
+
+            if (status) {
+                query += " AND payment_status = ?";
+                params.push(status);
+            }
+
+            const [rows] = await pool.query(query, params);
+
+            res.json({
+                status: "success",
+                data: rows
+            });
+        } catch (error) {
+            console.error("Failed to fetch reservations:", error.message);
+
+            res.status(500).json({
+                error: "Internal server error"
+            });
+        }
+    }
+);
