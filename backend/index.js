@@ -210,48 +210,18 @@ app.get(
         }
     }
 );
-app.get("/api/members/:id/balance", authenticateToken, async (req, res) => {
+app.get("/api/leaderboard", authenticateToken, async (req, res) => {
     try {
-        const memberId = Number(req.params.id);
-
-        if (!Number.isInteger(memberId) || memberId <= 0) {
-            return res.status(400).json({
-                error: "Invalid member ID"
-            });
-        }
-
-        if (
-            req.user.app_role === "Member" &&
-            Number(req.user.user_id) !== memberId
-        ) {
-            return res.status(403).json({
-                error: "Members can only view their own balance"
-            });
-        }
-
-        if (req.user.app_role === "Casual") {
-            return res.status(403).json({
-                error: "Insufficient permissions"
-            });
-        }
-
         const [rows] = await pool.query(
-            "SELECT * FROM v_member_balance WHERE user_id = ?",
-            [memberId]
+            "SELECT * FROM v_leaderboard"
         );
-
-        if (rows.length === 0) {
-            return res.status(404).json({
-                error: "Member not found"
-            });
-        }
 
         res.json({
             status: "success",
-            data: rows[0]
+            data: rows
         });
     } catch (error) {
-        console.error("Failed to fetch member balance:", error.message);
+        console.error("Failed to fetch leaderboard:", error.message);
 
         res.status(500).json({
             error: "Internal server error"
