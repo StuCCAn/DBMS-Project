@@ -964,14 +964,9 @@ BEGIN
     -- Test 41: sp_record_assessment: Invalid coach ID returns clean SQLSTATE 45000 instead of raw foreign key error
     -- ----------------------------------------------------------------
     BEGIN
-        DECLARE v_sqlstate CHAR(5) DEFAULT '';
-        DECLARE v_mysql_errno INT DEFAULT 0;
-        DECLARE CONTINUE HANDLER FOR SQLEXCEPTION
-        BEGIN
-            SET v_err_count = v_err_count + 1;
-            GET DIAGNOSTICS CONDITION 1 v_sqlstate = RETURNED_SQLSTATE, v_mysql_errno = MYSQL_ERRNO;
-        END;
-        SET v_err_count = 0;
+        DECLARE v_is_45000 BOOL DEFAULT FALSE;
+        DECLARE CONTINUE HANDLER FOR SQLSTATE '45000' SET v_is_45000 = TRUE;
+        DECLARE CONTINUE HANDLER FOR SQLEXCEPTION SET v_err_count = 1;
 
         -- Attempt assessment with non-existent coach ID (9999)
         CALL sp_record_assessment(2, 9999, 'Safety play', 7, 'Test invalid coach assessment');
@@ -979,9 +974,9 @@ BEGIN
         INSERT INTO Test_Results VALUES (
             41,
             'sp_record_assessment: Invalid coach ID returns clean SQLSTATE 45000 instead of raw foreign key error',
-            'SUCCESS',
-            IF(v_err_count = 1 AND v_sqlstate = '45000' AND v_mysql_errno = 1644, 'SUCCESS', 'FAILED'),
-            (v_err_count = 1 AND v_sqlstate = '45000' AND v_mysql_errno = 1644)
+            'REJECTED',
+            IF(v_is_45000 = TRUE, 'REJECTED', 'ACCEPTED'),
+            (v_is_45000 = TRUE)
         );
 
         -- Safety cleanup

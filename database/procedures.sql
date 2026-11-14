@@ -481,28 +481,28 @@ CREATE PROCEDURE sp_record_assessment(
 BEGIN
     DECLARE EXIT HANDLER FOR SQLEXCEPTION BEGIN ROLLBACK; RESIGNAL; END;
 
-    IF p_skill NOT IN ('Long potting', 'Safety play', 'Break building', 'Positional play', 'Cue ball control', 'Pressure handling') THEN
-        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Invalid skill area: must match allowed assessment categories';
-    END IF;
-
-    IF p_rating IS NULL OR p_rating < 1 OR p_rating > 10 THEN
-        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Rating must be between 1 and 10';
-    END IF;
-
-    IF p_player_id = p_assessed_by THEN
-        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Player cannot assess themselves';
-    END IF;
-
-    IF p_assessed_by IS NULL OR NOT EXISTS (
-        SELECT 1 FROM Users
-         WHERE user_id = p_assessed_by
-           AND is_active = TRUE
-           AND (app_role IN ('Admin', 'Staff') OR user_type = 'Member')
-    ) THEN
-        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Assessing coach not found or inactive';
-    END IF;
-
     START TRANSACTION;
+        IF p_skill NOT IN ('Long potting', 'Safety play', 'Break building', 'Positional play', 'Cue ball control', 'Pressure handling') THEN
+            SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Invalid skill area: must match allowed assessment categories';
+        END IF;
+
+        IF p_rating IS NULL OR p_rating < 1 OR p_rating > 10 THEN
+            SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Rating must be between 1 and 10';
+        END IF;
+
+        IF p_player_id = p_assessed_by THEN
+            SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Player cannot assess themselves';
+        END IF;
+
+        IF p_assessed_by IS NULL OR NOT EXISTS (
+            SELECT 1 FROM Users
+             WHERE user_id = p_assessed_by
+               AND is_active = TRUE
+               AND (app_role IN ('Admin', 'Staff') OR user_type = 'Member')
+        ) THEN
+            SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Assessing coach not found or inactive';
+        END IF;
+
         INSERT INTO Skill_Assessments(player_id, assessed_by, skill_area, rating, notes, assessed_on)
         VALUES (p_player_id, p_assessed_by, p_skill, p_rating, p_notes, CURRENT_DATE);
     COMMIT;
@@ -604,15 +604,15 @@ CREATE PROCEDURE sp_set_password(
 BEGIN
     DECLARE EXIT HANDLER FOR SQLEXCEPTION BEGIN ROLLBACK; RESIGNAL; END;
 
-    IF p_user_id IS NULL THEN
-        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'User ID is required';
-    END IF;
-
-    IF p_password_hash IS NULL OR TRIM(p_password_hash) = '' THEN
-        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Password hash cannot be empty';
-    END IF;
-
     START TRANSACTION;
+        IF p_user_id IS NULL THEN
+            SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'User ID is required';
+        END IF;
+
+        IF p_password_hash IS NULL OR TRIM(p_password_hash) = '' THEN
+            SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Password hash cannot be empty';
+        END IF;
+
         IF NOT EXISTS (SELECT 1 FROM Users WHERE user_id = p_user_id) THEN
             SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'User not found';
         END IF;
@@ -634,11 +634,11 @@ CREATE PROCEDURE sp_set_tournament_status(
 BEGIN
     DECLARE EXIT HANDLER FOR SQLEXCEPTION BEGIN ROLLBACK; RESIGNAL; END;
 
-    IF p_status NOT IN ('Draft', 'Registration', 'Ongoing', 'Completed', 'Cancelled') THEN
-        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Invalid tournament status: must be Draft, Registration, Ongoing, Completed, or Cancelled';
-    END IF;
-
     START TRANSACTION;
+        IF p_status NOT IN ('Draft', 'Registration', 'Ongoing', 'Completed', 'Cancelled') THEN
+            SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Invalid tournament status: must be Draft, Registration, Ongoing, Completed, or Cancelled';
+        END IF;
+
         IF NOT EXISTS (SELECT 1 FROM Tournaments WHERE tournament_id = p_tournament_id) THEN
             SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Tournament not found';
         END IF;
