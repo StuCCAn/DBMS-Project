@@ -170,3 +170,97 @@ SELECT u.user_id, u.name, u.user_type,
   JOIN Club_Member cm ON cm.user_id = u.user_id
  WHERE (cm.is_enthusiast = FALSE AND (cm.interest_type IS NOT NULL OR cm.wants_trial IS NOT NULL))
     OR (cm.is_enthusiast = TRUE  AND (cm.interest_type IS NULL     OR cm.wants_trial IS NULL));
+
+-- ------------------------------------------------------------------
+-- Phase 4 Extended Read Views (Exposing user_id for ownership checks)
+-- ------------------------------------------------------------------
+
+-- 11. Complete reservations registry with user and table details
+CREATE OR REPLACE VIEW v_reservations_all AS
+SELECT r.reservation_id,
+       r.user_id,
+       u.name AS user_name,
+       r.table_id,
+       t.name AS table_name,
+       r.start_time,
+       r.end_time,
+       r.billing_mode,
+       r.frames_played,
+       r.total_amount,
+       r.payment_status
+  FROM Reservations r
+  JOIN Users u ON u.user_id = r.user_id
+  JOIN Game_Tables t ON t.table_id = r.table_id;
+
+-- 12. Current status and rates of all game tables
+CREATE OR REPLACE VIEW v_tables_status AS
+SELECT table_id,
+       name,
+       game_type,
+       hourly_rate,
+       per_frame_rate,
+       status
+  FROM Game_Tables;
+
+-- 13. Audit log of all credit ledger transactions
+CREATE OR REPLACE VIEW v_credit_ledger_entries AS
+SELECT entry_id,
+       user_id,
+       reservation_id,
+       entry_type,
+       amount,
+       entry_date,
+       note
+  FROM Credit_Ledger;
+
+-- 14. Tournaments overview with registered player counts
+CREATE OR REPLACE VIEW v_tournaments_list AS
+SELECT t.tournament_id,
+       t.title,
+       t.game_type,
+       t.format,
+       t.start_date,
+       t.entry_fee,
+       t.status,
+       COUNT(tr.user_id) AS registered_players
+  FROM Tournaments t
+  LEFT JOIN Tournament_Registrations tr ON tr.tournament_id = t.tournament_id
+ GROUP BY t.tournament_id, t.title, t.game_type, t.format, t.start_date, t.entry_fee, t.status;
+
+-- 15. Tournament player rosters with seed and payment status
+CREATE OR REPLACE VIEW v_tournament_registrations AS
+SELECT tr.tournament_id,
+       tr.user_id,
+       u.name AS user_name,
+       tr.seed_number,
+       tr.fee_paid
+  FROM Tournament_Registrations tr
+  JOIN Users u ON u.user_id = tr.user_id;
+
+-- 16. Comprehensive equipment inventory catalog
+CREATE OR REPLACE VIEW v_inventory_catalog AS
+SELECT item_id,
+       name,
+       category,
+       quantity,
+       reorder_level,
+       reorder_flag,
+       condition_status,
+       last_serviced_date,
+       vendor_name
+  FROM Inventory_Items;
+
+-- 17. Historical coaching assessments with player and coach names
+CREATE OR REPLACE VIEW v_coaching_history AS
+SELECT sa.assessment_id,
+       sa.player_id,
+       up.name AS player_name,
+       sa.assessed_by,
+       uc.name AS coach_name,
+       sa.skill_area,
+       sa.rating,
+       sa.notes,
+       sa.assessed_on
+  FROM Skill_Assessments sa
+  JOIN Users up ON up.user_id = sa.player_id
+  JOIN Users uc ON uc.user_id = sa.assessed_by;
