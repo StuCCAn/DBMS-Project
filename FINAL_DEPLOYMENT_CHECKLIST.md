@@ -136,19 +136,19 @@ Complete each phase in order. The next phase begins only after the previous phas
 
 ### Phase 5 — Ananya: backend/API and D-01
 
-- [ ] Create `backend/` with Node.js, Express, and MySQL pooling.
-- [ ] Connect to MySQL as the least-privilege `cueclub_api` user (never as root).
-- [ ] Code API strictly against frozen procedure and view contracts in `docs/API_CONTRACT.md`.
-- [ ] Implement D-01 authentication fields and document the exact schema/API impact.
-- [ ] Add password handling, JWT authentication, and admin/staff/member access boundaries.
-- [ ] Use a password-hashing algorithm; never store or log plaintext passwords.
-- [ ] Configure JWT expiry, signing secrets, and authentication failure handling through environment variables.
-- [ ] Add authorization tests for every supported role and protected endpoint.
-- [ ] Add environment configuration and a database health endpoint.
-- [ ] Implement endpoints for booking, credit ledger, tournaments, match completion, and reports.
-- [ ] Use stored procedures and views rather than duplicating business rules in the API.
-- [ ] Add request validation and consistent error responses.
-- [ ] Add API tests for successful workflows and database-rejected operations.
+- [x] Create `backend/` with Node.js, Express, and MySQL pooling.
+- [x] Connect to MySQL as the least-privilege `cueclub_api` user (never as root).
+- [x] Code API strictly against frozen procedure and view contracts in `docs/API_CONTRACT.md`.
+- [x] Implement D-01 authentication fields and document the exact schema/API impact.
+- [x] Add password handling, JWT authentication, and admin/staff/member access boundaries.
+- [x] Use a password-hashing algorithm; never store or log plaintext passwords.
+- [x] Configure JWT expiry, signing secrets, and authentication failure handling through environment variables.
+- [x] Add authorization tests for every supported role and protected endpoint.
+- [x] Add environment configuration and a database health endpoint.
+- [x] Implement endpoints for booking, credit ledger, tournaments, match completion, and reports.
+- [x] Use stored procedures and views rather than duplicating business rules in the API.
+- [x] Add request validation and consistent error responses.
+- [x] Add API tests for successful workflows and database-rejected operations.
 - [ ] Sign off API contracts before frontend integration.
 
 ### Phase 6 — Ujjwal: frontend, integration, and documentation

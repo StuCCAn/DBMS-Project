@@ -1,31 +1,98 @@
+const path = require("path");
+require("dotenv").config({ path: path.join(__dirname, ".env") });
+
 const express = require("express");
 const pool = require("./db");
-const bcrypt = require("bcryptjs");
+const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
+
+if (!process.env.JWT_SECRET) {
+    console.error("FATAL: JWT_SECRET is not defined in environment variables.");
+    process.exit(1);
+}
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
 app.use(express.json());
 
+// ---------------------------------------------------------------------------
+// Helpers: Single-connection OUT parameter runner & MySQL error mapper
+// ---------------------------------------------------------------------------
+async function callProcWithOut(callSql, params, selectOutSql) {
+    const conn = await pool.getConnection();
+    try {
+        await conn.query(callSql, params);
+        const [rows] = await conn.query(selectOutSql);
+        return rows[0];
+    } finally {
+        conn.release();
+    }
+}
+
+function sendDbError(res, error, contextMessage) {
+    console.error(`${contextMessage}:`, error.message);
+
+    // MySQL 8 CHECK constraint violation (sqlState HY000, errno 3819)
+    if (error.errno === 3819) {
+        return res.status(400).json({ error: error.message });
+    }
+
+    // Duplicate key or FK constraint violation
+    if (error.sqlState === "23000") {
+        const isDuplicate = error.errno === 1062;
+        return res.status(isDuplicate ? 409 : 400).json({
+            error: isDuplicate ? "Duplicate record already exists" : error.message
+        });
+    }
+
+    // Application-level SIGNAL SQLSTATE '45000' from procedures/triggers
+    if (error.sqlState === "45000") {
+        const msg = error.message || "Operation rejected by database rule";
+        if (msg.includes("not found")) {
+            return res.status(404).json({ error: msg });
+        }
+        if (
+            msg.includes("Rule R9") ||
+            msg.includes("registered club members") ||
+            msg.includes("active, non-expired club members")
+        ) {
+            return res.status(403).json({ error: msg });
+        }
+        if (
+            msg.includes("Double booking") ||
+            msg.includes("not available for booking") ||
+            msg.includes("Registration is not open")
+        ) {
+            return res.status(409).json({ error: msg });
+        }
+        if (msg.includes("Credit limit exceeded")) {
+            return res.status(402).json({ error: msg });
+        }
+        return res.status(400).json({ error: msg });
+    }
+
+    return res.status(500).json({ error: "Internal server error" });
+}
+
+// ---------------------------------------------------------------------------
+// Health & Authentication
+// ---------------------------------------------------------------------------
 app.get("/api/health", async (req, res) => {
     try {
         const [rows] = await pool.query("SELECT 1 AS connected");
-
         res.json({
             status: "ok",
             database: rows[0].connected === 1 ? "connected" : "error"
         });
     } catch (error) {
         console.error("Database health check failed:", error.message);
-
         res.status(500).json({
             status: "error",
             database: "disconnected"
         });
     }
 });
-
 
 app.post("/api/auth/login", async (req, res) => {
     try {
@@ -37,11 +104,7 @@ app.post("/api/auth/login", async (req, res) => {
             });
         }
 
-        const [rows] = await pool.query(
-            "CALL sp_get_login(?)",
-            [email]
-        );
-
+        const [rows] = await pool.query("CALL sp_get_login(?)", [email]);
         const users = rows[0];
 
         if (!users || users.length === 0) {
@@ -58,11 +121,13 @@ app.post("/api/auth/login", async (req, res) => {
             });
         }
 
-        const passwordMatch = await bcrypt.compare(
-            password,
-            user.password_hash
-        );
+        if (!user.password_hash) {
+            return res.status(401).json({
+                error: "Password not configured for this account"
+            });
+        }
 
+        const passwordMatch = await bcrypt.compare(password, user.password_hash);
         if (!passwordMatch) {
             return res.status(401).json({
                 error: "Invalid email or password"
@@ -91,11 +156,7 @@ app.post("/api/auth/login", async (req, res) => {
             }
         });
     } catch (error) {
-        console.error("Login failed:", error.message);
-
-        res.status(500).json({
-            error: "Internal server error"
-        });
+        sendDbError(res, error, "Login failed");
     }
 });
 
@@ -121,12 +182,6 @@ function authenticateToken(req, res, next) {
     }
 }
 
-app.get("/api/auth/me", authenticateToken, (req, res) => {
-    res.json({
-        user: req.user
-    });
-});
-
 function requireRole(...allowedRoles) {
     return (req, res, next) => {
         if (!req.user || !allowedRoles.includes(req.user.app_role)) {
@@ -134,30 +189,225 @@ function requireRole(...allowedRoles) {
                 error: "Insufficient permissions"
             });
         }
-
         next();
     };
 }
 
+app.get("/api/auth/me", authenticateToken, (req, res) => {
+    res.json({ user: req.user });
+});
 
-app.get("/api/tables", authenticateToken, async (req, res) => {
+// ---------------------------------------------------------------------------
+// User Registration & Lifecycle (Members, Casuals, Password, Deactivate)
+// ---------------------------------------------------------------------------
+app.post("/api/members", authenticateToken, requireRole("Admin", "Staff"), async (req, res) => {
     try {
-        const [rows] = await pool.query(
-            "SELECT * FROM v_tables_status"
+        const {
+            name,
+            phone,
+            email,
+            membershipNo,
+            plan,
+            startDate,
+            endDate,
+            discountPct = 0,
+            creditLimit = 0,
+            password
+        } = req.body;
+
+        if (!name || !phone || !email || !membershipNo || !plan || !startDate || !endDate) {
+            return res.status(400).json({
+                error: "name, phone, email, membershipNo, plan, startDate, and endDate are required"
+            });
+        }
+
+        if (password !== undefined && password !== null && password !== "") {
+            if (typeof password !== "string" || password.length < 6) {
+                return res.status(400).json({
+                    error: "Password must be at least 6 characters"
+                });
+            }
+        }
+
+        const out = await callProcWithOut(
+            "CALL sp_register_member(?, ?, ?, ?, ?, ?, ?, ?, ?, @p_user_id)",
+            [
+                name,
+                phone,
+                email,
+                membershipNo,
+                plan,
+                startDate,
+                endDate,
+                Number(discountPct),
+                Number(creditLimit)
+            ],
+            "SELECT @p_user_id AS user_id"
         );
+
+        if (password) {
+            const passwordHash = await bcrypt.hash(password, 10);
+            await pool.query("CALL sp_set_password(?, ?)", [out.user_id, passwordHash]);
+        }
+
+        res.status(201).json({
+            status: "success",
+            data: {
+                user_id: out.user_id,
+                userId: out.user_id,
+                name,
+                membershipNo,
+                userType: "Member",
+                appRole: "Member"
+            }
+        });
+    } catch (error) {
+        sendDbError(res, error, "Failed to register member");
+    }
+});
+
+app.post("/api/casuals", authenticateToken, requireRole("Admin", "Staff"), async (req, res) => {
+    try {
+        const { name, phone, email, password } = req.body;
+
+        if (!name || !phone || !email) {
+            return res.status(400).json({
+                error: "name, phone, and email are required"
+            });
+        }
+
+        if (password !== undefined && password !== null && password !== "") {
+            if (typeof password !== "string" || password.length < 6) {
+                return res.status(400).json({
+                    error: "Password must be at least 6 characters"
+                });
+            }
+        }
+
+        const out = await callProcWithOut(
+            "CALL sp_register_casual(?, ?, ?, @p_user_id)",
+            [name, phone, email],
+            "SELECT @p_user_id AS user_id"
+        );
+
+        if (password) {
+            const passwordHash = await bcrypt.hash(password, 10);
+            await pool.query("CALL sp_set_password(?, ?)", [out.user_id, passwordHash]);
+        }
+
+        res.status(201).json({
+            status: "success",
+            data: {
+                user_id: out.user_id,
+                userId: out.user_id,
+                name,
+                userType: "Casual",
+                appRole: "Casual"
+            }
+        });
+    } catch (error) {
+        sendDbError(res, error, "Failed to register casual player");
+    }
+});
+
+app.put("/api/users/:id/password", authenticateToken, async (req, res) => {
+    try {
+        const targetUserId = Number(req.params.id);
+        const { newPassword } = req.body;
+
+        if (!Number.isInteger(targetUserId) || targetUserId <= 0) {
+            return res.status(400).json({ error: "Invalid user ID" });
+        }
+
+        if (typeof newPassword !== "string" || newPassword.trim() === "") {
+            return res.status(400).json({ error: "newPassword is required" });
+        }
+
+        if (
+            req.user.app_role !== "Admin" &&
+            Number(req.user.user_id) !== targetUserId
+        ) {
+            return res.status(403).json({
+                error: "You can only change your own password"
+            });
+        }
+
+        const passwordHash = await bcrypt.hash(newPassword, 10);
+        await pool.query("CALL sp_set_password(?, ?)", [targetUserId, passwordHash]);
 
         res.json({
             status: "success",
-            data: rows
+            data: { user_id: targetUserId }
         });
     } catch (error) {
-        console.error("Failed to fetch tables:", error.message);
-
-        res.status(500).json({
-            error: "Internal server error"
-        });
+        sendDbError(res, error, "Failed to set password");
     }
 });
+
+async function handleDeactivateUser(req, res) {
+    try {
+        const targetUserId = Number(req.params.id);
+
+        if (!Number.isInteger(targetUserId) || targetUserId <= 0) {
+            return res.status(400).json({ error: "Invalid user ID" });
+        }
+
+        if (targetUserId === Number(req.user.user_id)) {
+            return res.status(400).json({ error: "You cannot deactivate your own account" });
+        }
+
+        await pool.query("CALL sp_deactivate_user(?)", [targetUserId]);
+
+        res.json({
+            status: "success",
+            data: {
+                user_id: targetUserId,
+                is_active: false
+            }
+        });
+    } catch (error) {
+        sendDbError(res, error, "Failed to deactivate user");
+    }
+}
+
+app.patch("/api/users/:id/deactivate", authenticateToken, requireRole("Admin"), handleDeactivateUser);
+app.post("/api/users/:id/deactivate", authenticateToken, requireRole("Admin"), handleDeactivateUser);
+
+// ---------------------------------------------------------------------------
+// Tables & Reservations
+// ---------------------------------------------------------------------------
+app.get("/api/tables", authenticateToken, async (req, res) => {
+    try {
+        const [rows] = await pool.query("SELECT * FROM v_tables_status");
+        res.json({ status: "success", data: rows });
+    } catch (error) {
+        sendDbError(res, error, "Failed to fetch tables");
+    }
+});
+
+app.patch("/api/tables/:id/status", authenticateToken, requireRole("Admin", "Staff"), async (req, res) => {
+    try {
+        const tableId = Number(req.params.id);
+        const { status } = req.body;
+
+        if (!Number.isInteger(tableId) || tableId <= 0) {
+            return res.status(400).json({ error: "Invalid table ID" });
+        }
+        if (!status) {
+            return res.status(400).json({ error: "status is required" });
+        }
+
+        await pool.query("CALL sp_set_table_status(?, ?)", [tableId, status]);
+
+        res.json({
+            status: "success",
+            data: { table_id: tableId, status }
+        });
+    } catch (error) {
+        sendDbError(res, error, "Failed to update table status");
+    }
+});
+
 app.get(
     "/api/reservations",
     authenticateToken,
@@ -175,7 +425,6 @@ app.get(
                         error: "Members can only view their own reservations"
                     });
                 }
-
                 query += " AND user_id = ?";
                 params.push(req.user.user_id);
             } else if (userId) {
@@ -194,178 +443,148 @@ app.get(
             }
 
             const [rows] = await pool.query(query, params);
-
-            res.json({
-                status: "success",
-                data: rows
-            });
+            res.json({ status: "success", data: rows });
         } catch (error) {
-            console.error("Failed to fetch reservations:", error.message);
-
-            res.status(500).json({
-                error: "Internal server error"
-            });
+            sendDbError(res, error, "Failed to fetch reservations");
         }
     }
 );
-app.get("/api/leaderboard", authenticateToken, async (req, res) => {
+
+app.post("/api/reservations", authenticateToken, async (req, res) => {
     try {
-        const [rows] = await pool.query(
-            "SELECT * FROM v_leaderboard"
-        );
+        const { userId, tableId, start, end, mode, frames, payStatus } = req.body;
 
-        res.json({
-            status: "success",
-            data: rows
-        });
-    } catch (error) {
-        console.error("Failed to fetch leaderboard:", error.message);
-
-        res.status(500).json({
-            error: "Internal server error"
-        });
-    }
-});
-app.get("/api/reports/win-streaks", authenticateToken, requireRole("Admin", "Staff"), async (req, res) => {
-    try {
-        const [rows] = await pool.query("SELECT * FROM v_win_streaks");
-
-        res.json({
-            status: "success",
-            data: rows
-        });
-    } catch (error) {
-        console.error("Failed to fetch win streaks:", error.message);
-        res.status(500).json({ error: "Internal server error" });
-    }
-});
-
-
-app.get("/api/reports/head-to-head", authenticateToken, requireRole("Admin", "Staff"), async (req, res) => {
-    try {
-        const [rows] = await pool.query("SELECT * FROM v_head_to_head");
-
-        res.json({
-            status: "success",
-            data: rows
-        });
-    } catch (error) {
-        console.error("Failed to fetch head-to-head report:", error.message);
-        res.status(500).json({ error: "Internal server error" });
-    }
-});
-
-
-app.get("/api/tournaments/:id/bracket", authenticateToken, async (req, res) => {
-    try {
-        const tournamentId = Number(req.params.id);
-
-        if (!Number.isInteger(tournamentId) || tournamentId <= 0) {
-            return res.status(400).json({ error: "Invalid tournament ID" });
+        if (req.user.app_role === "Casual") {
+            return res.status(403).json({ error: "Insufficient permissions" });
         }
 
-        const [rows] = await pool.query(
-            "SELECT * FROM v_bracket_tree WHERE tournament_id = ?",
-            [tournamentId]
+        const targetUserId = userId === undefined
+            ? Number(req.user.user_id)
+            : Number(userId);
+
+        if (
+            req.user.app_role === "Member" &&
+            targetUserId !== Number(req.user.user_id)
+        ) {
+            return res.status(403).json({
+                error: "Members can only book for themselves"
+            });
+        }
+
+        if (!tableId || !start || !end || !mode || frames === undefined || !payStatus) {
+            return res.status(400).json({
+                error: "tableId, start, end, mode, frames, and payStatus are required"
+            });
+        }
+
+        const out = await callProcWithOut(
+            "CALL sp_book_table(?, ?, ?, ?, ?, ?, ?, @p_reservation_id)",
+            [
+                targetUserId,
+                Number(tableId),
+                start,
+                end,
+                mode,
+                Number(frames),
+                payStatus
+            ],
+            "SELECT @p_reservation_id AS reservation_id"
         );
 
-        res.json({
+        res.status(201).json({
             status: "success",
-            data: rows
+            data: { reservation_id: out.reservation_id }
         });
     } catch (error) {
-        console.error("Failed to fetch tournament bracket:", error.message);
-        res.status(500).json({ error: "Internal server error" });
+        sendDbError(res, error, "Failed to create reservation");
     }
 });
 
-
-app.get("/api/reports/table-utilisation", authenticateToken, requireRole("Admin", "Staff"), async (req, res) => {
+app.post("/api/reservations/:id/cancel", authenticateToken, async (req, res) => {
     try {
-        const [rows] = await pool.query("SELECT * FROM v_table_utilisation");
+        const reservationId = Number(req.params.id);
 
-        res.json({
-            status: "success",
-            data: rows
-        });
-    } catch (error) {
-        console.error("Failed to fetch table utilisation:", error.message);
-        res.status(500).json({ error: "Internal server error" });
-    }
-});
-
-
-app.get("/api/inventory/reorder-alerts", authenticateToken, requireRole("Admin", "Staff"), async (req, res) => {
-    try {
-        const [rows] = await pool.query("SELECT * FROM v_reorder_alerts");
-
-        res.json({
-            status: "success",
-            data: rows
-        });
-    } catch (error) {
-        console.error("Failed to fetch reorder alerts:", error.message);
-        res.status(500).json({ error: "Internal server error" });
-    }
-});
-
-
-app.get("/api/coaching/weaknesses", authenticateToken, async (req, res) => {
-    try {
-        const { playerId } = req.query;
+        if (!Number.isInteger(reservationId) || reservationId <= 0) {
+            return res.status(400).json({ error: "Invalid reservation ID" });
+        }
 
         if (req.user.app_role === "Casual") {
             return res.status(403).json({ error: "Insufficient permissions" });
         }
 
         if (req.user.app_role === "Member") {
-            if (playerId && Number(playerId) !== Number(req.user.user_id)) {
+            const [rows] = await pool.query(
+                "SELECT user_id FROM v_reservations_all WHERE reservation_id = ?",
+                [reservationId]
+            );
+
+            if (!rows.length) {
+                return res.status(404).json({ error: "Reservation not found" });
+            }
+
+            if (Number(rows[0].user_id) !== Number(req.user.user_id)) {
                 return res.status(403).json({
-                    error: "Members can only view their own weaknesses"
+                    error: "Members can only cancel their own reservations"
                 });
             }
         }
 
-        let query = "SELECT * FROM v_player_weaknesses";
-        const params = [];
-
-        if (playerId) {
-            query += " WHERE player_id = ?";
-            params.push(playerId);
-        } else if (req.user.app_role === "Member") {
-            query += " WHERE player_id = ?";
-            params.push(req.user.user_id);
-        }
-
-        const [rows] = await pool.query(query, params);
-
-        res.json({
-            status: "success",
-            data: rows
-        });
-    } catch (error) {
-        console.error("Failed to fetch player weaknesses:", error.message);
-        res.status(500).json({ error: "Internal server error" });
-    }
-});
-
-
-app.get("/api/admin/diagnostics", authenticateToken, requireRole("Admin"), async (req, res) => {
-    try {
-        const [rows] = await pool.query(
-            "SELECT * FROM v_specialization_anomalies"
+        const out = await callProcWithOut(
+            "CALL sp_cancel_booking(?, @p_refund_amount)",
+            [reservationId],
+            "SELECT @p_refund_amount AS refund_amount"
         );
 
         res.json({
             status: "success",
-            data: rows
+            data: {
+                reservation_id: reservationId,
+                refund_amount: out.refund_amount
+            }
         });
     } catch (error) {
-        console.error("Failed to fetch diagnostics:", error.message);
-        res.status(500).json({ error: "Internal server error" });
+        sendDbError(res, error, "Failed to cancel reservation");
     }
 });
 
+// ---------------------------------------------------------------------------
+// Credit Ledger & Member Balance
+// ---------------------------------------------------------------------------
+app.get("/api/members/:id/balance", authenticateToken, async (req, res) => {
+    try {
+        const memberId = Number(req.params.id);
+
+        if (!Number.isInteger(memberId) || memberId <= 0) {
+            return res.status(400).json({ error: "Invalid member ID" });
+        }
+
+        if (req.user.app_role === "Casual") {
+            return res.status(403).json({ error: "Insufficient permissions" });
+        }
+
+        if (
+            req.user.app_role === "Member" &&
+            memberId !== Number(req.user.user_id)
+        ) {
+            return res.status(403).json({
+                error: "Members can only view their own balance"
+            });
+        }
+
+        const [rows] = await pool.query(
+            "SELECT * FROM v_member_balance WHERE user_id = ?",
+            [memberId]
+        );
+
+        if (!rows.length) {
+            return res.status(404).json({ error: "Member balance not found" });
+        }
+
+        res.json({ status: "success", data: rows[0] });
+    } catch (error) {
+        sendDbError(res, error, "Failed to fetch member balance");
+    }
+});
 
 app.get("/api/ledger/entries", authenticateToken, async (req, res) => {
     try {
@@ -395,232 +614,80 @@ app.get("/api/ledger/entries", authenticateToken, async (req, res) => {
         }
 
         const [rows] = await pool.query(query, params);
-
-        res.json({
-            status: "success",
-            data: rows
-        });
+        res.json({ status: "success", data: rows });
     } catch (error) {
-        console.error("Failed to fetch ledger entries:", error.message);
-        res.status(500).json({ error: "Internal server error" });
-    }
-});
-app.put("/api/users/:id/password", authenticateToken, async (req, res) => {
-    try {
-        const targetUserId = Number(req.params.id);
-        const { passwordHash } = req.body;
-
-        if (!Number.isInteger(targetUserId) || targetUserId <= 0) {
-            return res.status(400).json({
-                error: "Invalid user ID"
-            });
-        }
-
-        if (!passwordHash) {
-            return res.status(400).json({
-                error: "passwordHash is required"
-            });
-        }
-
-        if (
-            req.user.app_role !== "Admin" &&
-            Number(req.user.user_id) !== targetUserId
-        ) {
-            return res.status(403).json({
-                error: "You can only change your own password"
-            });
-        }
-
-        await pool.query(
-            "CALL sp_set_password(?, ?)",
-            [targetUserId, passwordHash]
-        );
-
-        res.json({
-            status: "success",
-            data: {
-                user_id: targetUserId
-            }
-        });
-    } catch (error) {
-        console.error("Failed to set password:", error.message);
-
-        let statusCode = 400;
-
-        if (error.message.includes("User not found")) {
-            statusCode = 404;
-        }
-
-        res.status(statusCode).json({
-            error: error.message
-        });
+        sendDbError(res, error, "Failed to fetch ledger entries");
     }
 });
 
-
-app.post("/api/matches/:id/complete", authenticateToken, requireRole("Admin", "Staff"), async (req, res) => {
+app.post("/api/ledger/payment", authenticateToken, requireRole("Admin", "Staff"), async (req, res) => {
     try {
-        const matchId = Number(req.params.id);
-        const { frames, winPoints, lossPoints } = req.body;
+        const { userId, amount, note } = req.body;
 
-        if (!Number.isInteger(matchId) || matchId <= 0) {
+        if (!userId || amount === undefined || !Number.isFinite(Number(amount))) {
             return res.status(400).json({
-                error: "Invalid match ID"
+                error: "userId and numeric amount are required"
             });
         }
 
-        if (!Array.isArray(frames)) {
-            return res.status(400).json({
-                error: "frames must be an array"
-            });
-        }
-
-        if (winPoints === undefined || lossPoints === undefined) {
-            return res.status(400).json({
-                error: "winPoints and lossPoints are required"
-            });
-        }
-
-        await pool.query(
-            "CALL sp_complete_match(?, ?, ?, ?)",
-            [
-                matchId,
-                JSON.stringify(frames),
-                Number(winPoints),
-                Number(lossPoints)
-            ]
+        const out = await callProcWithOut(
+            "CALL sp_record_payment(?, ?, ?, @p_entry_id)",
+            [Number(userId), Number(amount), note || null],
+            "SELECT @p_entry_id AS entry_id"
         );
 
-        res.json({
+        res.status(201).json({
             status: "success",
-            data: {
-                match_id: matchId
-            }
+            data: { entry_id: out.entry_id }
         });
     } catch (error) {
-        console.error("Failed to complete match:", error.message);
-
-        res.status(error.sqlState === "45000" ? 400 : 500).json({
-            error: error.message
-        });
+        sendDbError(res, error, "Failed to record payment");
     }
 });
 
-
-app.patch("/api/inventory/:id/stock", authenticateToken, requireRole("Admin", "Staff"), async (req, res) => {
+app.post("/api/ledger/charge", authenticateToken, requireRole("Admin", "Staff"), async (req, res) => {
     try {
-        const itemId = Number(req.params.id);
-        const { delta } = req.body;
+        const { userId, type, amount, note } = req.body;
 
-        if (!Number.isInteger(itemId) || itemId <= 0) {
+        if (!userId || !type || amount === undefined || !Number.isFinite(Number(amount))) {
             return res.status(400).json({
-                error: "Invalid inventory item ID"
+                error: "userId, type, and numeric amount are required"
             });
         }
 
-        if (delta === undefined) {
-            return res.status(400).json({
-                error: "delta is required"
-            });
-        }
-
-        await pool.query(
-            "CALL sp_update_inventory_stock(?, ?)",
-            [itemId, Number(delta)]
+        const out = await callProcWithOut(
+            "CALL sp_record_charge(?, ?, ?, ?, @p_entry_id)",
+            [Number(userId), type, Number(amount), note || null],
+            "SELECT @p_entry_id AS entry_id"
         );
 
-        res.json({
+        res.status(201).json({
             status: "success",
-            data: {
-                item_id: itemId,
-                delta: Number(delta)
-            }
+            data: { entry_id: out.entry_id }
         });
     } catch (error) {
-        console.error("Failed to update inventory stock:", error.message);
-
-        res.status(error.sqlState === "45000" ? 400 : 500).json({
-            error: error.message
-        });
+        sendDbError(res, error, "Failed to record charge");
     }
 });
 
-
-app.patch("/api/inventory/:id/condition", authenticateToken, requireRole("Admin", "Staff"), async (req, res) => {
+// ---------------------------------------------------------------------------
+// Tournaments, Matches & Leaderboard
+// ---------------------------------------------------------------------------
+app.get("/api/leaderboard", authenticateToken, async (req, res) => {
     try {
-        const itemId = Number(req.params.id);
-        const { status } = req.body;
-
-        if (!Number.isInteger(itemId) || itemId <= 0) {
-            return res.status(400).json({
-                error: "Invalid inventory item ID"
-            });
-        }
-
-        if (!status) {
-            return res.status(400).json({
-                error: "status is required"
-            });
-        }
-
-        await pool.query(
-            "CALL sp_set_inventory_condition(?, ?)",
-            [itemId, status]
-        );
-
-        res.json({
-            status: "success",
-            data: {
-                item_id: itemId,
-                status
-            }
-        });
+        const [rows] = await pool.query("SELECT * FROM v_leaderboard");
+        res.json({ status: "success", data: rows });
     } catch (error) {
-        console.error("Failed to update inventory condition:", error.message);
-
-        res.status(error.sqlState === "45000" ? 400 : 500).json({
-            error: error.message
-        });
+        sendDbError(res, error, "Failed to fetch leaderboard");
     }
 });
 
 app.get("/api/tournaments", authenticateToken, async (req, res) => {
     try {
-        const [rows] = await pool.query(
-            "SELECT * FROM v_tournaments_list"
-        );
-
-        res.json({
-            status: "success",
-            data: rows
-        });
+        const [rows] = await pool.query("SELECT * FROM v_tournaments_list");
+        res.json({ status: "success", data: rows });
     } catch (error) {
-        console.error("Failed to fetch tournaments:", error.message);
-        res.status(500).json({ error: "Internal server error" });
-    }
-});
-
-
-app.get("/api/tournaments/:id/registrations", authenticateToken, async (req, res) => {
-    try {
-        const tournamentId = Number(req.params.id);
-
-        if (!Number.isInteger(tournamentId) || tournamentId <= 0) {
-            return res.status(400).json({ error: "Invalid tournament ID" });
-        }
-
-        const [rows] = await pool.query(
-            "SELECT * FROM v_tournament_registrations WHERE tournament_id = ?",
-            [tournamentId]
-        );
-
-        res.json({
-            status: "success",
-            data: rows
-        });
-    } catch (error) {
-        console.error("Failed to fetch tournament registrations:", error.message);
-        res.status(500).json({ error: "Internal server error" });
+        sendDbError(res, error, "Failed to fetch tournaments");
     }
 });
 
@@ -634,32 +701,20 @@ app.post("/api/tournaments", authenticateToken, requireRole("Admin", "Staff"), a
             });
         }
 
-        const [result] = await pool.query(
+        const out = await callProcWithOut(
             "CALL sp_create_tournament(?, ?, ?, ?, ?, @p_tournament_id)",
-            [title, game, format, start, fee]
-        );
-
-        const [idRows] = await pool.query(
+            [title, game, format, start, Number(fee)],
             "SELECT @p_tournament_id AS tournament_id"
         );
 
         res.status(201).json({
             status: "success",
-            data: {
-                tournament_id: idRows[0].tournament_id
-            }
+            data: { tournament_id: out.tournament_id }
         });
     } catch (error) {
-        console.error("Failed to create tournament:", error.message);
-
-        const status = error.sqlState === "45000" ? 400 : 500;
-
-        res.status(status).json({
-            error: error.message
-        });
+        sendDbError(res, error, "Failed to create tournament");
     }
 });
-
 
 app.patch("/api/tournaments/:id/status", authenticateToken, requireRole("Admin", "Staff"), async (req, res) => {
     try {
@@ -667,40 +722,39 @@ app.patch("/api/tournaments/:id/status", authenticateToken, requireRole("Admin",
         const { status } = req.body;
 
         if (!Number.isInteger(tournamentId) || tournamentId <= 0) {
-            return res.status(400).json({
-                error: "Invalid tournament ID"
-            });
+            return res.status(400).json({ error: "Invalid tournament ID" });
         }
-
         if (!status) {
-            return res.status(400).json({
-                error: "status is required"
-            });
+            return res.status(400).json({ error: "status is required" });
         }
 
-        await pool.query(
-            "CALL sp_set_tournament_status(?, ?)",
-            [tournamentId, status]
-        );
+        await pool.query("CALL sp_set_tournament_status(?, ?)", [tournamentId, status]);
 
         res.json({
             status: "success",
-            data: {
-                tournament_id: tournamentId,
-                status
-            }
+            data: { tournament_id: tournamentId, status }
         });
     } catch (error) {
-        console.error("Failed to update tournament status:", error.message);
-
-        const statusCode = error.sqlState === "45000" ? 400 : 500;
-
-        res.status(statusCode).json({
-            error: error.message
-        });
+        sendDbError(res, error, "Failed to update tournament status");
     }
 });
 
+app.get("/api/tournaments/:id/registrations", authenticateToken, async (req, res) => {
+    try {
+        const tournamentId = Number(req.params.id);
+        if (!Number.isInteger(tournamentId) || tournamentId <= 0) {
+            return res.status(400).json({ error: "Invalid tournament ID" });
+        }
+
+        const [rows] = await pool.query(
+            "SELECT * FROM v_tournament_registrations WHERE tournament_id = ?",
+            [tournamentId]
+        );
+        res.json({ status: "success", data: rows });
+    } catch (error) {
+        sendDbError(res, error, "Failed to fetch tournament registrations");
+    }
+});
 
 app.post("/api/tournaments/:id/register", authenticateToken, async (req, res) => {
     try {
@@ -708,15 +762,11 @@ app.post("/api/tournaments/:id/register", authenticateToken, async (req, res) =>
         const { userId, seed, feePaid } = req.body;
 
         if (!Number.isInteger(tournamentId) || tournamentId <= 0) {
-            return res.status(400).json({
-                error: "Invalid tournament ID"
-            });
+            return res.status(400).json({ error: "Invalid tournament ID" });
         }
 
         if (req.user.app_role === "Casual") {
-            return res.status(403).json({
-                error: "Insufficient permissions"
-            });
+            return res.status(403).json({ error: "Insufficient permissions" });
         }
 
         const targetUserId = userId === undefined
@@ -724,9 +774,7 @@ app.post("/api/tournaments/:id/register", authenticateToken, async (req, res) =>
             : Number(userId);
 
         if (!Number.isInteger(targetUserId) || targetUserId <= 0) {
-            return res.status(400).json({
-                error: "Invalid user ID"
-            });
+            return res.status(400).json({ error: "Invalid user ID" });
         }
 
         if (
@@ -739,19 +787,12 @@ app.post("/api/tournaments/:id/register", authenticateToken, async (req, res) =>
         }
 
         if (feePaid === undefined) {
-            return res.status(400).json({
-                error: "feePaid is required"
-            });
+            return res.status(400).json({ error: "feePaid is required" });
         }
 
         await pool.query(
             "CALL sp_register_tournament_player(?, ?, ?, ?)",
-            [
-                tournamentId,
-                targetUserId,
-                seed === undefined ? null : seed,
-                feePaid
-            ]
+            [tournamentId, targetUserId, seed === undefined ? null : seed, feePaid]
         );
 
         res.status(201).json({
@@ -764,313 +805,209 @@ app.post("/api/tournaments/:id/register", authenticateToken, async (req, res) =>
             }
         });
     } catch (error) {
-        console.error("Failed to register tournament player:", error.message);
-
-        let statusCode = 500;
-
-        if (error.sqlState === "23000") {
-            statusCode = 409;
-        } else if (error.sqlState === "45000") {
-            statusCode = 409;
-        }
-
-        res.status(statusCode).json({
-            error: error.message
-        });
+        sendDbError(res, error, "Failed to register tournament player");
     }
 });
-app.post("/api/reservations", authenticateToken, async (req, res) => {
+
+app.get("/api/tournaments/:id/bracket", authenticateToken, async (req, res) => {
     try {
+        const tournamentId = Number(req.params.id);
+        if (!Number.isInteger(tournamentId) || tournamentId <= 0) {
+            return res.status(400).json({ error: "Invalid tournament ID" });
+        }
+
+        const [rows] = await pool.query(
+            "SELECT * FROM v_bracket_tree WHERE tournament_id = ?",
+            [tournamentId]
+        );
+        res.json({ status: "success", data: rows });
+    } catch (error) {
+        sendDbError(res, error, "Failed to fetch tournament bracket");
+    }
+});
+
+app.post("/api/tournaments/:id/matches", authenticateToken, requireRole("Admin", "Staff"), async (req, res) => {
+    try {
+        const tournamentId = Number(req.params.id);
         const {
-            userId,
-            tableId,
-            start,
-            end,
-            mode,
-            frames,
-            payStatus
+            roundNumber,
+            player1Id = null,
+            player2Id = null,
+            nextMatchId = null,
+            tableId = null,
+            scheduledTime = null
         } = req.body;
 
-        if (req.user.app_role === "Casual") {
-            return res.status(403).json({
-                error: "Insufficient permissions"
-            });
+        if (!Number.isInteger(tournamentId) || tournamentId <= 0) {
+            return res.status(400).json({ error: "Invalid tournament ID" });
         }
 
-        const targetUserId = userId === undefined
-            ? Number(req.user.user_id)
-            : Number(userId);
-
-        if (
-            req.user.app_role === "Member" &&
-            targetUserId !== Number(req.user.user_id)
-        ) {
-            return res.status(403).json({
-                error: "Members can only book for themselves"
-            });
+        if (roundNumber === undefined || !Number.isInteger(Number(roundNumber))) {
+            return res.status(400).json({ error: "roundNumber is required" });
         }
 
-        if (!tableId || !start || !end || !mode || frames === undefined || !payStatus) {
-            return res.status(400).json({
-                error: "tableId, start, end, mode, frames, and payStatus are required"
-            });
-        }
-
-        await pool.query(
-            "CALL sp_book_table(?, ?, ?, ?, ?, ?, ?, @p_reservation_id)",
+        const out = await callProcWithOut(
+            "CALL sp_create_match(?, ?, ?, ?, ?, ?, ?, @p_match_id)",
             [
-                targetUserId,
-                Number(tableId),
-                start,
-                end,
-                mode,
-                Number(frames),
-                payStatus
-            ]
-        );
-
-        const [rows] = await pool.query(
-            "SELECT @p_reservation_id AS reservation_id"
+                tournamentId,
+                Number(roundNumber),
+                player1Id === null ? null : Number(player1Id),
+                player2Id === null ? null : Number(player2Id),
+                nextMatchId === null ? null : Number(nextMatchId),
+                tableId === null ? null : Number(tableId),
+                scheduledTime
+            ],
+            "SELECT @p_match_id AS match_id"
         );
 
         res.status(201).json({
             status: "success",
-            data: {
-                reservation_id: rows[0].reservation_id
-            }
+            data: { match_id: out.match_id }
         });
     } catch (error) {
-        console.error("Failed to create reservation:", error.message);
-
-        res.status(error.sqlState === "45000" ? 400 : 500).json({
-            error: error.message
-        });
+        sendDbError(res, error, "Failed to create match");
     }
 });
 
-
-app.post("/api/reservations/:id/cancel", authenticateToken, async (req, res) => {
+app.post("/api/matches/:id/complete", authenticateToken, requireRole("Admin", "Staff"), async (req, res) => {
     try {
-        const reservationId = Number(req.params.id);
+        const matchId = Number(req.params.id);
+        const { frames, winPoints, lossPoints } = req.body;
 
-        if (!Number.isInteger(reservationId) || reservationId <= 0) {
-            return res.status(400).json({
-                error: "Invalid reservation ID"
-            });
+        if (!Number.isInteger(matchId) || matchId <= 0) {
+            return res.status(400).json({ error: "Invalid match ID" });
         }
-
-        if (req.user.app_role === "Casual") {
-            return res.status(403).json({
-                error: "Insufficient permissions"
-            });
+        if (!Array.isArray(frames)) {
+            return res.status(400).json({ error: "frames must be an array" });
         }
-
-        if (req.user.app_role === "Member") {
-            const [rows] = await pool.query(
-                "SELECT user_id FROM v_reservations_all WHERE reservation_id = ?",
-                [reservationId]
-            );
-
-            if (!rows.length) {
-                return res.status(404).json({
-                    error: "Reservation not found"
-                });
-            }
-
-            if (Number(rows[0].user_id) !== Number(req.user.user_id)) {
-                return res.status(403).json({
-                    error: "Members can only cancel their own reservations"
-                });
-            }
+        if (winPoints === undefined || lossPoints === undefined) {
+            return res.status(400).json({ error: "winPoints and lossPoints are required" });
         }
 
         await pool.query(
-            "CALL sp_cancel_booking(?, @p_refund_amount)",
-            [reservationId]
-        );
-
-        const [refundRows] = await pool.query(
-            "SELECT @p_refund_amount AS refund_amount"
+            "CALL sp_complete_match(?, ?, ?, ?)",
+            [matchId, JSON.stringify(frames), Number(winPoints), Number(lossPoints)]
         );
 
         res.json({
             status: "success",
-            data: {
-                reservation_id: reservationId,
-                refund_amount: refundRows[0].refund_amount
-            }
+            data: { match_id: matchId }
         });
     } catch (error) {
-        console.error("Failed to cancel reservation:", error.message);
-
-        res.status(error.sqlState === "45000" ? 400 : 500).json({
-            error: error.message
-        });
+        sendDbError(res, error, "Failed to complete match");
     }
 });
 
-
-app.patch("/api/tables/:id/status", authenticateToken, requireRole("Admin", "Staff"), async (req, res) => {
-    try {
-        const tableId = Number(req.params.id);
-        const { status } = req.body;
-
-        if (!Number.isInteger(tableId) || tableId <= 0) {
-            return res.status(400).json({
-                error: "Invalid table ID"
-            });
-        }
-
-        if (!status) {
-            return res.status(400).json({
-                error: "status is required"
-            });
-        }
-
-        await pool.query(
-            "CALL sp_set_table_status(?, ?)",
-            [tableId, status]
-        );
-
-        res.json({
-            status: "success",
-            data: {
-                table_id: tableId,
-                status
-            }
-        });
-    } catch (error) {
-        console.error("Failed to update table status:", error.message);
-
-        res.status(error.sqlState === "45000" ? 400 : 500).json({
-            error: error.message
-        });
-    }
-});
-
-
-app.post("/api/ledger/payment", authenticateToken, requireRole("Admin", "Staff"), async (req, res) => {
-    try {
-        const { userId, amount, note } = req.body;
-
-        if (!userId || amount === undefined) {
-            return res.status(400).json({
-                error: "userId and amount are required"
-            });
-        }
-
-        await pool.query(
-            "CALL sp_record_payment(?, ?, ?, @p_entry_id)",
-            [
-                Number(userId),
-                Number(amount),
-                note || null
-            ]
-        );
-
-        const [rows] = await pool.query(
-            "SELECT @p_entry_id AS entry_id"
-        );
-
-        res.status(201).json({
-            status: "success",
-            data: {
-                entry_id: rows[0].entry_id
-            }
-        });
-    } catch (error) {
-        console.error("Failed to record payment:", error.message);
-
-        let statusCode = 400;
-
-        if (
-            error.sqlState !== "45000" &&
-            error.sqlState !== "23000"
-        ) {
-            statusCode = 500;
-        }
-
-        if (
-            error.sqlState === "45000" &&
-            error.message.includes("registered club members")
-        ) {
-            statusCode = 403;
-        }
-
-        res.status(statusCode).json({
-            error: error.message
-        });
-    }
-});
-
-
-app.post("/api/ledger/charge", authenticateToken, requireRole("Admin", "Staff"), async (req, res) => {
-    try {
-        const { userId, type, amount, note } = req.body;
-
-        if (!userId || !type || amount === undefined) {
-            return res.status(400).json({
-                error: "userId, type, and amount are required"
-            });
-        }
-
-        await pool.query(
-            "CALL sp_record_charge(?, ?, ?, ?, @p_entry_id)",
-            [
-                Number(userId),
-                type,
-                Number(amount),
-                note || null
-            ]
-        );
-
-        const [rows] = await pool.query(
-            "SELECT @p_entry_id AS entry_id"
-        );
-
-        res.status(201).json({
-            status: "success",
-            data: {
-                entry_id: rows[0].entry_id
-            }
-        });
-    } catch (error) {
-        console.error("Failed to record charge:", error.message);
-
-        let statusCode = 400;
-
-        if (error.sqlState !== "45000") {
-            statusCode = 500;
-        }
-
-        if (
-            error.sqlState === "45000" &&
-            error.message.includes("registered club members")
-        ) {
-            statusCode = 403;
-        }
-
-        res.status(statusCode).json({
-            error: error.message
-        });
-    }
-});
+// ---------------------------------------------------------------------------
+// Inventory & Reorder Alerts
+// ---------------------------------------------------------------------------
 app.get("/api/inventory", authenticateToken, requireRole("Admin", "Staff"), async (req, res) => {
     try {
-        const [rows] = await pool.query(
-            "SELECT * FROM v_inventory_catalog"
-        );
-
-        res.json({
-            status: "success",
-            data: rows
-        });
+        const [rows] = await pool.query("SELECT * FROM v_inventory_catalog");
+        res.json({ status: "success", data: rows });
     } catch (error) {
-        console.error("Failed to fetch inventory:", error.message);
-        res.status(500).json({ error: "Internal server error" });
+        sendDbError(res, error, "Failed to fetch inventory");
     }
 });
 
+app.get("/api/inventory/reorder-alerts", authenticateToken, requireRole("Admin", "Staff"), async (req, res) => {
+    try {
+        const [rows] = await pool.query("SELECT * FROM v_reorder_alerts");
+        res.json({ status: "success", data: rows });
+    } catch (error) {
+        sendDbError(res, error, "Failed to fetch reorder alerts");
+    }
+});
+
+app.patch("/api/inventory/:id/stock", authenticateToken, requireRole("Admin", "Staff"), async (req, res) => {
+    try {
+        const itemId = Number(req.params.id);
+        const { delta } = req.body;
+
+        if (!Number.isInteger(itemId) || itemId <= 0) {
+            return res.status(400).json({ error: "Invalid inventory item ID" });
+        }
+        if (delta === undefined || !Number.isFinite(Number(delta))) {
+            return res.status(400).json({ error: "numeric delta is required" });
+        }
+
+        await pool.query("CALL sp_update_inventory_stock(?, ?)", [itemId, Number(delta)]);
+
+        res.json({
+            status: "success",
+            data: { item_id: itemId, delta: Number(delta) }
+        });
+    } catch (error) {
+        sendDbError(res, error, "Failed to update inventory stock");
+    }
+});
+
+app.patch("/api/inventory/:id/condition", authenticateToken, requireRole("Admin", "Staff"), async (req, res) => {
+    try {
+        const itemId = Number(req.params.id);
+        const { status } = req.body;
+
+        if (!Number.isInteger(itemId) || itemId <= 0) {
+            return res.status(400).json({ error: "Invalid inventory item ID" });
+        }
+        if (!status) {
+            return res.status(400).json({ error: "status is required" });
+        }
+
+        await pool.query("CALL sp_set_inventory_condition(?, ?)", [itemId, status]);
+
+        res.json({
+            status: "success",
+            data: { item_id: itemId, status }
+        });
+    } catch (error) {
+        sendDbError(res, error, "Failed to update inventory condition");
+    }
+});
+
+// ---------------------------------------------------------------------------
+// Coaching Assessments, History & Weaknesses
+// ---------------------------------------------------------------------------
+app.post("/api/coaching/assessments", authenticateToken, requireRole("Admin", "Staff"), async (req, res) => {
+    try {
+        const { playerId, assessedBy, coachId, skillArea, skill, rating, notes } = req.body;
+        const resolvedSkill = skillArea || skill;
+        const resolvedAssessor = assessedBy !== undefined
+            ? Number(assessedBy)
+            : coachId !== undefined
+                ? Number(coachId)
+                : Number(req.user.user_id);
+
+        if (!playerId || !resolvedSkill || rating === undefined) {
+            return res.status(400).json({
+                error: "playerId, skillArea, and rating are required"
+            });
+        }
+
+        await pool.query(
+            "CALL sp_record_assessment(?, ?, ?, ?, ?)",
+            [
+                Number(playerId),
+                resolvedAssessor,
+                resolvedSkill,
+                Number(rating),
+                notes || null
+            ]
+        );
+
+        res.status(201).json({
+            status: "success",
+            data: {
+                player_id: Number(playerId),
+                assessed_by: resolvedAssessor,
+                skill_area: resolvedSkill,
+                rating: Number(rating)
+            }
+        });
+    } catch (error) {
+        sendDbError(res, error, "Failed to record coaching assessment");
+    }
+});
 
 app.get("/api/coaching/history", authenticateToken, async (req, res) => {
     try {
@@ -1100,17 +1037,84 @@ app.get("/api/coaching/history", authenticateToken, async (req, res) => {
         }
 
         const [rows] = await pool.query(query, params);
-
-        res.json({
-            status: "success",
-            data: rows
-        });
+        res.json({ status: "success", data: rows });
     } catch (error) {
-        console.error("Failed to fetch coaching history:", error.message);
-        res.status(500).json({ error: "Internal server error" });
+        sendDbError(res, error, "Failed to fetch coaching history");
     }
 });
 
+app.get("/api/coaching/weaknesses", authenticateToken, async (req, res) => {
+    try {
+        const { playerId } = req.query;
+
+        if (req.user.app_role === "Casual") {
+            return res.status(403).json({ error: "Insufficient permissions" });
+        }
+
+        if (req.user.app_role === "Member") {
+            if (playerId && Number(playerId) !== Number(req.user.user_id)) {
+                return res.status(403).json({
+                    error: "Members can only view their own weaknesses"
+                });
+            }
+        }
+
+        let query = "SELECT * FROM v_player_weaknesses";
+        const params = [];
+
+        if (playerId) {
+            query += " WHERE player_id = ?";
+            params.push(playerId);
+        } else if (req.user.app_role === "Member") {
+            query += " WHERE player_id = ?";
+            params.push(req.user.user_id);
+        }
+
+        const [rows] = await pool.query(query, params);
+        res.json({ status: "success", data: rows });
+    } catch (error) {
+        sendDbError(res, error, "Failed to fetch player weaknesses");
+    }
+});
+
+// ---------------------------------------------------------------------------
+// Analytical Reports & Admin Diagnostics
+// ---------------------------------------------------------------------------
+app.get("/api/reports/win-streaks", authenticateToken, requireRole("Admin", "Staff"), async (req, res) => {
+    try {
+        const [rows] = await pool.query("SELECT * FROM v_win_streaks");
+        res.json({ status: "success", data: rows });
+    } catch (error) {
+        sendDbError(res, error, "Failed to fetch win streaks");
+    }
+});
+
+app.get("/api/reports/head-to-head", authenticateToken, requireRole("Admin", "Staff"), async (req, res) => {
+    try {
+        const [rows] = await pool.query("SELECT * FROM v_head_to_head");
+        res.json({ status: "success", data: rows });
+    } catch (error) {
+        sendDbError(res, error, "Failed to fetch head-to-head report");
+    }
+});
+
+app.get("/api/reports/table-utilisation", authenticateToken, requireRole("Admin", "Staff"), async (req, res) => {
+    try {
+        const [rows] = await pool.query("SELECT * FROM v_table_utilisation");
+        res.json({ status: "success", data: rows });
+    } catch (error) {
+        sendDbError(res, error, "Failed to fetch table utilisation");
+    }
+});
+
+app.get("/api/admin/diagnostics", authenticateToken, requireRole("Admin"), async (req, res) => {
+    try {
+        const [rows] = await pool.query("SELECT * FROM v_specialization_anomalies");
+        res.json({ status: "success", data: rows });
+    } catch (error) {
+        sendDbError(res, error, "Failed to fetch diagnostics");
+    }
+});
 
 app.listen(PORT, () => {
     console.log(`CueClub API running on port ${PORT}`);

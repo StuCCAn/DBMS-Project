@@ -22,6 +22,7 @@ DROP PROCEDURE IF EXISTS sp_set_inventory_condition;
 DROP PROCEDURE IF EXISTS sp_deactivate_user;
 DROP PROCEDURE IF EXISTS sp_set_password;
 DROP PROCEDURE IF EXISTS sp_set_tournament_status;
+DROP PROCEDURE IF EXISTS sp_create_match;
 
 DELIMITER $$
 
@@ -646,6 +647,105 @@ BEGIN
         UPDATE Tournaments
            SET status = p_status
          WHERE tournament_id = p_tournament_id;
+    COMMIT;
+END$$
+
+-- ---------------------------------------------------------------
+-- 17. Tournament Management: Create Match
+--     Aligned with Matches schema (round_number, next_match_id)
+--     and sp_complete_match deterministic 2-feeder bracket rule.
+-- ---------------------------------------------------------------
+CREATE PROCEDURE sp_create_match(
+    IN  p_tournament_id  INT,
+    IN  p_round_number   INT,
+    IN  p_player1_id     INT,
+    IN  p_player2_id     INT,
+    IN  p_next_match_id  INT,
+    IN  p_table_id       INT,
+    IN  p_scheduled_time DATETIME,
+    OUT p_match_id       INT
+)
+BEGIN
+    DECLARE v_t_status   VARCHAR(20);
+    DECLARE v_next_tour  INT;
+    DECLARE v_next_round INT;
+    DECLARE v_feeders    INT DEFAULT 0;
+    DECLARE EXIT HANDLER FOR SQLEXCEPTION BEGIN ROLLBACK; RESIGNAL; END;
+
+    IF p_round_number IS NULL OR p_round_number < 1 THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Round number must be at least 1';
+    END IF;
+
+    IF p_player1_id IS NOT NULL AND p_player2_id IS NOT NULL AND p_player1_id = p_player2_id THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'A match cannot pair a player against themselves';
+    END IF;
+
+    START TRANSACTION;
+        SELECT status INTO v_t_status
+          FROM Tournaments
+         WHERE tournament_id = p_tournament_id
+           FOR UPDATE;
+
+        IF v_t_status IS NULL THEN
+            SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Tournament not found';
+        END IF;
+
+        IF v_t_status IN ('Completed', 'Cancelled') THEN
+            SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Cannot add matches to a completed or cancelled tournament';
+        END IF;
+
+        IF p_player1_id IS NOT NULL AND NOT EXISTS (
+            SELECT 1 FROM Tournament_Registrations
+             WHERE tournament_id = p_tournament_id AND user_id = p_player1_id
+        ) THEN
+            SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Player 1 is not registered in this tournament';
+        END IF;
+
+        IF p_player2_id IS NOT NULL AND NOT EXISTS (
+            SELECT 1 FROM Tournament_Registrations
+             WHERE tournament_id = p_tournament_id AND user_id = p_player2_id
+        ) THEN
+            SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Player 2 is not registered in this tournament';
+        END IF;
+
+        IF p_next_match_id IS NOT NULL THEN
+            SELECT tournament_id, round_number
+              INTO v_next_tour, v_next_round
+              FROM Matches
+             WHERE match_id = p_next_match_id;
+
+            IF v_next_tour IS NULL THEN
+                SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Next round match not found';
+            END IF;
+
+            IF v_next_tour <> p_tournament_id OR v_next_round <= p_round_number THEN
+                SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Next match must be a later round in the same tournament';
+            END IF;
+
+            SELECT COUNT(*) INTO v_feeders
+              FROM Matches
+             WHERE next_match_id = p_next_match_id;
+
+            IF v_feeders >= 2 THEN
+                SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Next match already has two feeder matches assigned';
+            END IF;
+        END IF;
+
+        IF p_table_id IS NOT NULL AND NOT EXISTS (
+            SELECT 1 FROM Game_Tables WHERE table_id = p_table_id
+        ) THEN
+            SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Assigned game table not found';
+        END IF;
+
+        INSERT INTO Matches (
+            tournament_id, round_number, player1_id, player2_id,
+            next_match_id, table_id, scheduled_time, status
+        ) VALUES (
+            p_tournament_id, p_round_number, p_player1_id, p_player2_id,
+            p_next_match_id, p_table_id, p_scheduled_time, 'Scheduled'
+        );
+
+        SET p_match_id = LAST_INSERT_ID();
     COMMIT;
 END$$
 
