@@ -180,3 +180,14 @@ jobs:
           mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root cueclub < database/constraint_tests.sql
           echo "Verifying test harness re-runnability and state idempotency (second consecutive run)..."
           mysql --protocol=tcp -h 127.0.0.1 -P 3306 -u root -e "CALL cueclub.sp_run_constraint_tests();"
+
+      - name: Run concurrency credit race test
+        if: steps.detect-database.outputs.available == 'true'
+        shell: bash
+        env:
+          MYSQL_PWD: cueclub-ci
+        run: |
+          set -euo pipefail
+          chmod +x database/tests/credit_race.sh
+          bash database/tests/credit_race.sh
+
