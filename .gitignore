@@ -1,2 +1,7 @@
 backend/.env
 backend/node_modules/
+
+# Backend local files
+backend/.env.*
+!backend/.env.example
+*.log
