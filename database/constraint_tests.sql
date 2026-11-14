@@ -32,7 +32,7 @@ BEGIN
     DELETE FROM Match_Frames WHERE match_id IN (10, 11, 90, 91);
     DELETE FROM Matches WHERE match_id IN (10, 11, 90, 91);
     DELETE FROM Tournament_Registrations WHERE tournament_id IN (2, 90, 91);
-    DELETE FROM Tournaments WHERE tournament_id IN (2, 90, 91);
+    DELETE FROM Tournaments WHERE title LIKE 'Test %' OR tournament_id IN (2, 90, 91);
     DELETE FROM Skill_Assessments WHERE notes LIKE 'Test %';
     DELETE FROM Credit_Ledger WHERE note LIKE 'Test %'
         OR user_id IN (98, 99)
@@ -40,6 +40,7 @@ BEGIN
     DELETE FROM Reservations WHERE start_time >= '2026-12-01' OR user_id IN (98, 99);
     DELETE FROM Club_Member WHERE user_id IN (98, 99);
     DELETE FROM Users WHERE user_id IN (98, 99);
+    UPDATE Users SET password_hash = '$2b$12$e8vBwO5F0fR.vP0NlK7F7.mK3rA6G1y0y7Xl8Q5f9gR0e3g5h8y1K' WHERE user_id = 1;
     UPDATE Game_Tables SET status = 'Available' WHERE table_id IN (1, 2, 4, 5);
     UPDATE Game_Tables SET status = 'Maintenance' WHERE table_id = 3;
     UPDATE Inventory_Items SET quantity = 6, condition_status = 'Good' WHERE item_id = 1;
@@ -886,12 +887,114 @@ BEGIN
     END;
 
     -- ----------------------------------------------------------------
+    -- Test 39: sp_set_password: Valid password update succeeds, non-existent user and empty/null hash rejected
+    -- ----------------------------------------------------------------
+    BEGIN
+        DECLARE v_updated_hash VARCHAR(255) DEFAULT NULL;
+        DECLARE CONTINUE HANDLER FOR SQLEXCEPTION SET v_err_count = v_err_count + 1;
+        SET v_err_count = 0;
+
+        -- Rejection 1: Non-existent user
+        CALL sp_set_password(9999, '$2b$12$newdummyhashplaceholdervalue1234567890abcdefghijk');
+
+        -- Rejection 2: Empty hash
+        CALL sp_set_password(1, '');
+
+        -- Rejection 3: Whitespace hash
+        CALL sp_set_password(1, '   ');
+
+        -- Rejection 4: NULL hash
+        CALL sp_set_password(1, NULL);
+
+        -- Success: Valid password hash update for User 1
+        CALL sp_set_password(1, '$2b$12$updatedhashforuser1testingpurposesonly123456789');
+
+        SELECT password_hash INTO v_updated_hash FROM Users WHERE user_id = 1;
+
+        INSERT INTO Test_Results VALUES (
+            39,
+            'sp_set_password: Valid password update succeeds, non-existent user and empty/null hash rejected',
+            'SUCCESS',
+            IF(v_err_count = 4 AND v_updated_hash = '$2b$12$updatedhashforuser1testingpurposesonly123456789', 'SUCCESS', 'FAILED'),
+            (v_err_count = 4 AND v_updated_hash = '$2b$12$updatedhashforuser1testingpurposesonly123456789')
+        );
+
+        -- Fixture restoration for User 1
+        UPDATE Users SET password_hash = '$2b$12$e8vBwO5F0fR.vP0NlK7F7.mK3rA6G1y0y7Xl8Q5f9gR0e3g5h8y1K' WHERE user_id = 1;
+    END;
+
+    -- ----------------------------------------------------------------
+    -- Test 40: sp_set_tournament_status: Valid status transition succeeds, invalid status and non-existent tournament rejected
+    -- ----------------------------------------------------------------
+    BEGIN
+        DECLARE v_tid INT DEFAULT NULL;
+        DECLARE v_new_status VARCHAR(20) DEFAULT NULL;
+        DECLARE CONTINUE HANDLER FOR SQLEXCEPTION SET v_err_count = v_err_count + 1;
+        SET v_err_count = 0;
+
+        -- Create isolated temporary tournament fixture
+        CALL sp_create_tournament('Test Status Tournament', 'Snooker', 'Knockout', '2026-12-15', 100.00, v_tid);
+
+        -- Rejection 1: Invalid status string
+        CALL sp_set_tournament_status(v_tid, 'InvalidStatus');
+
+        -- Rejection 2: Non-existent tournament
+        CALL sp_set_tournament_status(9999, 'Ongoing');
+
+        -- Success: Transition to 'Ongoing'
+        CALL sp_set_tournament_status(v_tid, 'Ongoing');
+
+        SELECT status INTO v_new_status FROM Tournaments WHERE tournament_id = v_tid;
+
+        INSERT INTO Test_Results VALUES (
+            40,
+            'sp_set_tournament_status: Valid status transition succeeds, invalid status and non-existent tournament rejected',
+            'SUCCESS',
+            IF(v_err_count = 2 AND v_new_status = 'Ongoing', 'SUCCESS', 'FAILED'),
+            (v_err_count = 2 AND v_new_status = 'Ongoing')
+        );
+
+        -- Teardown temporary fixture
+        IF v_tid IS NOT NULL THEN
+            DELETE FROM Tournaments WHERE tournament_id = v_tid;
+        END IF;
+    END;
+
+    -- ----------------------------------------------------------------
+    -- Test 41: sp_record_assessment: Invalid coach ID returns clean SQLSTATE 45000 instead of raw foreign key error
+    -- ----------------------------------------------------------------
+    BEGIN
+        DECLARE v_sqlstate CHAR(5) DEFAULT '';
+        DECLARE v_mysql_errno INT DEFAULT 0;
+        DECLARE CONTINUE HANDLER FOR SQLEXCEPTION
+        BEGIN
+            SET v_err_count = v_err_count + 1;
+            GET DIAGNOSTICS CONDITION 1 v_sqlstate = RETURNED_SQLSTATE, v_mysql_errno = MYSQL_ERRNO;
+        END;
+        SET v_err_count = 0;
+
+        -- Attempt assessment with non-existent coach ID (9999)
+        CALL sp_record_assessment(2, 9999, 'Safety play', 7, 'Test invalid coach assessment');
+
+        INSERT INTO Test_Results VALUES (
+            41,
+            'sp_record_assessment: Invalid coach ID returns clean SQLSTATE 45000 instead of raw foreign key error',
+            'SUCCESS',
+            IF(v_err_count = 1 AND v_sqlstate = '45000' AND v_mysql_errno = 1644, 'SUCCESS', 'FAILED'),
+            (v_err_count = 1 AND v_sqlstate = '45000' AND v_mysql_errno = 1644)
+        );
+
+        -- Safety cleanup
+        DELETE FROM Skill_Assessments WHERE notes = 'Test invalid coach assessment';
+    END;
+
+    -- ----------------------------------------------------------------
     -- Teardown all temporary test fixtures (re-runnability guarantee)
     -- ----------------------------------------------------------------
     DELETE FROM Match_Frames WHERE match_id IN (10, 11, 90, 91);
     DELETE FROM Matches WHERE match_id IN (10, 11, 90, 91);
     DELETE FROM Tournament_Registrations WHERE tournament_id IN (2, 90, 91);
-    DELETE FROM Tournaments WHERE tournament_id IN (2, 90, 91);
+    DELETE FROM Tournaments WHERE title LIKE 'Test %' OR tournament_id IN (2, 90, 91);
     DELETE FROM Skill_Assessments WHERE notes LIKE 'Test %';
     DELETE FROM Credit_Ledger WHERE note LIKE 'Test %'
         OR user_id IN (98, 99)
@@ -899,6 +1002,7 @@ BEGIN
     DELETE FROM Reservations WHERE start_time >= '2026-12-01' OR user_id IN (98, 99);
     DELETE FROM Club_Member WHERE user_id IN (98, 99);
     DELETE FROM Users WHERE user_id IN (98, 99);
+    UPDATE Users SET password_hash = '$2b$12$e8vBwO5F0fR.vP0NlK7F7.mK3rA6G1y0y7Xl8Q5f9gR0e3g5h8y1K' WHERE user_id = 1;
     UPDATE Game_Tables SET status = 'Available' WHERE table_id IN (1, 2, 4, 5);
     UPDATE Game_Tables SET status = 'Maintenance' WHERE table_id = 3;
     UPDATE Inventory_Items SET quantity = 6, condition_status = 'Good' WHERE item_id = 1;
