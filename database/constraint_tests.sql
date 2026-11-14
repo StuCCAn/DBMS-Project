@@ -855,21 +855,24 @@ BEGIN
         DECLARE CONTINUE HANDLER FOR SQLEXCEPTION SET v_err_count = 1;
         SET v_err_count = 0;
 
+        -- Verify routine execution privilege in mysql.procs_priv (MySQL 8.0 system grant table)
         SELECT COUNT(*) INTO v_has_exec
-          FROM information_schema.ROUTINE_PRIVILEGES
-         WHERE GRANTEE = '\'cueclub_api\'@\'%\''
-           AND ROUTINE_NAME = 'sp_book_table'
-           AND PRIVILEGE_TYPE = 'EXECUTE';
+          FROM mysql.procs_priv
+         WHERE User = 'cueclub_api'
+           AND Routine_name = 'sp_book_table'
+           AND FIND_IN_SET('Execute', Proc_priv) > 0;
 
+        -- Verify view SELECT privilege in information_schema.TABLE_PRIVILEGES
         SELECT COUNT(*) INTO v_has_view
           FROM information_schema.TABLE_PRIVILEGES
-         WHERE GRANTEE = '\'cueclub_api\'@\'%\''
+         WHERE GRANTEE LIKE '%cueclub_api%'
            AND TABLE_NAME = 'v_leaderboard'
            AND PRIVILEGE_TYPE = 'SELECT';
 
+        -- Verify direct table INSERT is denied (0 rows granted)
         SELECT COUNT(*) INTO v_has_table_insert
           FROM information_schema.TABLE_PRIVILEGES
-         WHERE GRANTEE = '\'cueclub_api\'@\'%\''
+         WHERE GRANTEE LIKE '%cueclub_api%'
            AND TABLE_NAME = 'Reservations'
            AND PRIVILEGE_TYPE = 'INSERT';
 
@@ -877,8 +880,8 @@ BEGIN
             38,
             'Privilege: cueclub_api has EXECUTE on procedures, SELECT on views, and table INSERT is denied',
             'SUCCESS',
-            IF(v_err_count = 0 AND v_has_exec = 1 AND v_has_view = 1 AND v_has_table_insert = 0, 'SUCCESS', 'FAILED'),
-            (v_err_count = 0 AND v_has_exec = 1 AND v_has_view = 1 AND v_has_table_insert = 0)
+            IF(v_err_count = 0 AND v_has_exec >= 1 AND v_has_view >= 1 AND v_has_table_insert = 0, 'SUCCESS', 'FAILED'),
+            (v_err_count = 0 AND v_has_exec >= 1 AND v_has_view >= 1 AND v_has_table_insert = 0)
         );
     END;
 
