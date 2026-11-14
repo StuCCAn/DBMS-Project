@@ -148,6 +148,9 @@ BEGIN
         IF p_old_status = 'Pending' AND p_status NOT IN ('Pending', 'Paid', 'Cancelled') THEN
             SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Invalid reservation status transition for Pending booking';
         END IF;
+        IF p_old_status = 'Paid' AND p_status NOT IN ('Paid', 'Cancelled') THEN
+            SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Invalid reservation status transition: Paid bookings can only transition to Cancelled';
+        END IF;
     END IF;
 
     -- Rule R1: Bookings cannot cross midnight (allows terminating at midnight dot 00:00:00)
