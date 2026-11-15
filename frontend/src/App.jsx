@@ -29,6 +29,7 @@ export default function App() {
   const [currentUser, setUser] = useState(getCurrentUser());
   const [activeTab, setActiveTab] = useState("tables");
   const [loginModalOpen, setLoginModalOpen] = useState(!currentUser);
+  const [authMode, setAuthMode] = useState("login");
   const [passwordModalOpen, setPasswordModalOpen] = useState(false);
   const [scoringMatch, setScoringMatch] = useState(null);
 
@@ -211,13 +212,28 @@ export default function App() {
               </div>
             </div>
           ) : (
-            <button
-              className="btn btn-primary btn-sm"
-              style={{ width: "100%" }}
-              onClick={() => setLoginModalOpen(true)}
-            >
-              Sign In to CueClub
-            </button>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              <button
+                className="btn btn-primary btn-sm"
+                style={{ width: "100%" }}
+                onClick={() => {
+                  setAuthMode("login");
+                  setLoginModalOpen(true);
+                }}
+              >
+                Sign In to CueClub
+              </button>
+              <button
+                className="btn btn-secondary btn-sm"
+                style={{ width: "100%" }}
+                onClick={() => {
+                  setAuthMode("register");
+                  setLoginModalOpen(true);
+                }}
+              >
+                Sign Up / Register
+              </button>
+            </div>
           )}
         </div>
       </aside>
@@ -240,7 +256,9 @@ export default function App() {
 
       {/* Modals */}
       <LoginModal
+        key={`${authMode}-${loginModalOpen}`}
         isOpen={loginModalOpen}
+        initialMode={authMode}
         onClose={() => setLoginModalOpen(false)}
         onLoginSuccess={handleLoginSuccess}
       />

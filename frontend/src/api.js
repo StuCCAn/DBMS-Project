@@ -79,6 +79,15 @@ export async function login(email, password) {
   return res;
 }
 
+export async function register({ name, email, password, phone, role }) {
+  const res = await apiRequest("/auth/register", "POST", { name, email, password, phone, role });
+  if (res.token) {
+    setToken(res.token);
+    setCurrentUser(res.user);
+  }
+  return res;
+}
+
 export async function getMe() {
   return apiRequest("/auth/me");
 }

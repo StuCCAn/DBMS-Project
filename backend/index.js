@@ -246,6 +246,90 @@ app.post(
     }
 });
 
+app.post(
+    "/api/auth/register",
+    validate([
+        body("name").trim().notEmpty().withMessage("Full name is required"),
+        body("email").trim().notEmpty().withMessage("Email is required").isEmail().withMessage("Valid email is required"),
+        body("password").isString().isLength({ min: 6 }).withMessage("Password must be at least 6 characters"),
+        body("phone").optional().trim()
+    ]),
+    async (req, res) => {
+    try {
+        const { name, email, password, phone, role } = req.body;
+        const cleanEmail = (email || "").trim().toLowerCase();
+        const cleanPhone = (phone && phone.trim()) || "9876543210";
+        const requestedRole = (role === "Member") ? "Member" : "Casual";
+
+        // Check if email already exists
+        const [existing] = await pool.query("CALL sp_get_login(?)", [cleanEmail]);
+        if (existing[0] && existing[0].length > 0) {
+            return res.status(409).json({ error: "An account with this email already exists" });
+        }
+
+        let userId;
+        if (requestedRole === "Member") {
+            const membershipNo = `MEM-${Date.now().toString().slice(-6)}`;
+            const today = new Date();
+            const nextYear = new Date(today);
+            nextYear.setFullYear(today.getFullYear() + 1);
+            const startDate = today.toISOString().split("T")[0];
+            const endDate = nextYear.toISOString().split("T")[0];
+
+            const out = await callProcWithOut(
+                "CALL sp_register_member(?, ?, ?, ?, ?, ?, ?, ?, ?, @p_user_id)",
+                [
+                    name.trim(),
+                    cleanPhone,
+                    cleanEmail,
+                    membershipNo,
+                    "Annual",
+                    startDate,
+                    endDate,
+                    0,
+                    2000
+                ],
+                "SELECT @p_user_id AS user_id"
+            );
+            userId = out.user_id;
+        } else {
+            const out = await callProcWithOut(
+                "CALL sp_register_casual(?, ?, ?, @p_user_id)",
+                [name.trim(), cleanPhone, cleanEmail],
+                "SELECT @p_user_id AS user_id"
+            );
+            userId = out.user_id;
+        }
+
+        const passwordHash = await bcrypt.hash(password, 10);
+        await pool.query("CALL sp_set_password(?, ?)", [userId, passwordHash]);
+
+        const token = jwt.sign(
+            {
+                user_id: userId,
+                email: cleanEmail,
+                app_role: requestedRole,
+                user_type: requestedRole
+            },
+            process.env.JWT_SECRET,
+            { expiresIn: "2h" }
+        );
+
+        res.status(201).json({
+            token,
+            user: {
+                user_id: userId,
+                name: name.trim(),
+                email: cleanEmail,
+                app_role: requestedRole,
+                user_type: requestedRole
+            }
+        });
+    } catch (error) {
+        sendDbError(res, error, "Registration failed");
+    }
+});
+
 async function authenticateToken(req, res, next) {
     const authHeader = req.headers.authorization;
 
