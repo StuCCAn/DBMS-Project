@@ -1,56 +1,107 @@
-# CueClub
+# CueClub — Cue Sports & Tournament Management System
 
-A cue sports club and tournament management system, built as the DBMS course project for CS F212 (Database Systems) at BITS Pilani, Hyderabad Campus. Group 18.
+A cue sports club and tournament management system, built as the DBMS course project for **CS F212 (Database Systems)** at **BITS Pilani, Hyderabad Campus** (Semester I, 2026–27). Group 18.
 
-Cue clubs tend to run on paper registers and the manager's memory, so bookings overlap, credit (udhar) balances get disputed, tournament brackets get lost and stock-outs are noticed late. CueClub keeps table bookings, member credit, tournaments, rankings, coaching assessments and inventory in one relational database. The business rules live in the database as constraints, triggers and a transactional procedure, so they hold no matter which client writes the data.
+Cue clubs tend to run on paper registers and the manager's memory, so bookings overlap, credit (udhar) balances get disputed, tournament brackets get lost and stock-outs are noticed late. CueClub keeps table bookings, member credit, tournaments, rankings, coaching assessments and inventory in one relational database. The business rules live in the database as constraints, triggers and transactional procedures, so they hold no matter which client writes the data.
 
-## Team
+---
 
-| Name | ID | Contribution |
-| --- | --- | --- |
-| Priyansh Thadhani | 2024A3PS0356H | ER/EER model, relational mapping, schema definition, BCNF analysis |
-| Goru Nikhil | 2024A3PS0357H | Triggers, CHECK constraints, foreign-key rules, `sp_complete_match` transaction |
-| Ananya Avunooru | 2024A3PS0367H | REST API design, JWT authentication, MySQL connection pooling |
-| Manya Bhateja | 2024A3PS0378H | Leaderboard views, recursive CTE for bracket queries, synthetic data script |
-| Ujjwal Chandak | 2024A3PS0379H | React UI design for booking flow and credit ledger viewer, report compilation |
+## Final Submission Metadata
 
-## Mid-sem submission
+> [!IMPORTANT]
+> Per **Section 1.B** of the project submission guidelines, this repository is tagged as **`final`** for course evaluation.
+> Only the state at tag `final` should be evaluated.
+
+- **Course:** CS F212 Database Systems | Final Project Submission
+- **Deadline:** Sunday, 15 November 2026, 11:59 PM
+- **Git Submission Tag:** `final`
+- **Submitted Commit Hash:** `6f0724800a640a8aef57fb8cf2eca2414d30851b`
+- **Repository Link:** [https://github.com/StuCCAn/DBMS-Project](https://github.com/StuCCAn/DBMS-Project)
+- **Evaluation Checkout:**
+  ```bash
+  git fetch --all --tags
+  git checkout final
+  ```
+
+---
+
+## Team Members & Individual Contributions
+
+| Name | Student ID | Project Role & Individual Contributions |
+|---|---|---|
+| **Priyansh Thadhani** | `2024A3PS0356H` | **Database Architecture & Modeling:** Designed ER/EER model with Level-1 & Level-2 specialization, relational mapping to 11 relations, formal BCNF functional dependency proofs, and `docs/SCHEMA_MAPPING_AND_BASELINE.md`. |
+| **Goru Nikhil** | `2024A3PS0357H` | **Integrity Enforcement & Routines:** Implemented table/ledger triggers (`trg_reservation_bi`, `trg_ledger_bi`), CHECK boundaries, foreign-key rules, `sp_complete_match` multi-table atomic transaction with rollback, and concurrency locking (`SELECT ... FOR UPDATE`). |
+| **Ananya Avunooru** | `2024A3PS0367H` | **Backend API & Security:** Designed Node.js Express REST API (30 endpoints), least-privilege DB role (`roles.sql`), JWT authentication, `express-validator` schema rules, and 31 automated integration tests in CI. |
+| **Manya Bhateja** | `2024A3PS0378H` | **Advanced SQL & Analytics:** Developed SQL views including recursive CTE binary bracket tree (`v_bracket_tree`), gaps-and-islands win streaks (`v_win_streaks`), table utilisation (`v_table_utilisation`), and 43 automated constraint test harness cases. |
+| **Ujjwal Chandak** | `2024A3PS0379H` | **Frontend Application & Integration:** Built React 19 SPA dashboard with Vite, role-aware routing, interactive bracket visualizer, frame-by-frame match scorer modal, credit ledger viewer, API client layer, and report compilation. |
+
+---
+
+## Mid-Sem Submission Reference
 
 | Item | Where |
-| --- | --- |
-| Database design document (ER/EER, relational schema, constraints, normalization) | [`docs/CueClub_MidSem_Report.pdf`](docs/CueClub_MidSem_Report.pdf) |
-| Application design (workflows, stack, architecture) | Sections 7 and 8 of the same PDF |
+|---|---|
+| Database design document (ER/EER, relational schema, constraints, normalization) | [`docs/CueClub_MidSem_Report.pdf`](docs/CueClub_MidSem_Report.pdf) *(Immutable, verified by CI sha256)* |
+| Schema Mapping & Baseline Freeze | [`docs/SCHEMA_MAPPING_AND_BASELINE.md`](docs/SCHEMA_MAPPING_AND_BASELINE.md) |
+| REST API Contract Specification | [`docs/API_CONTRACT.md`](docs/API_CONTRACT.md) |
 
-## Design summary
+---
 
-- 11 relations: `Users`, `Club_Member`, `Game_Tables`, `Reservations`, `Credit_Ledger`, `Tournaments`, `Tournament_Registrations`, `Matches`, `Match_Frames`, `Skill_Assessments`, `Inventory_Items`.
-- Users are specialised into members and casual players (disjoint, total). Members can additionally be team members, individual players or enthusiasts (overlapping, partial). The report explains how this is mapped to tables.
-- All relations are in BCNF. Three deliberate redundancies are documented in the report: the stored `Reservations.total_amount` snapshot, the materialised `Users.ranking_points`, and the outstanding balance, which is derived through a view rather than stored.
-- Rules enforced in the database: no overlapping bookings on a table, credit only for members and within their limit, one registration and one seed per player per tournament, no drawn frames, and match completion as a single transaction (frames, winner, bracket advance, ranking points).
+## Design Summary
 
-## Technology stack
+- **11 Relations in BCNF:** `Users`, `Club_Member`, `Game_Tables`, `Reservations`, `Credit_Ledger`, `Tournaments`, `Tournament_Registrations`, `Matches`, `Match_Frames`, `Skill_Assessments`, `Inventory_Items`.
+- **Specialization Hierarchy:**
+  - **Level-1:** Total and disjoint (`Users` $\rightarrow$ `Club_Member`, `Casual`).
+  - **Level-2:** Overlapping and partial within `Club_Member` (Team Member, Individual Player, Enthusiast) enforced via boolean flags and `CHECK` constraints.
+- **Weak Entity:** `Match_Frames(match_id, frame_number)` dependent upon `Matches` with `ON DELETE CASCADE`.
+- **Deliberate Design Decisions:**
+  1. Stored snapshot of `Reservations.total_amount` to preserve historical billing rates.
+  2. Materialized `Users.ranking_points` maintained atomically during match completions.
+  3. Dynamic outstanding balance derived on-the-fly via `v_member_balance` (rather than stored) to avoid update anomalies.
+- **Approved Technical Deviations:**
+  - **D-01:** Addition of `password_hash`, `app_role`, and `is_active` to `Users` for web application authentication.
+  - **D-02:** `sp_cancel_booking` caps credit refund at outstanding balance to prevent trigger overpayment violations.
 
-| Layer | Choice |
-| --- | --- |
-| Database | MySQL 8.0 (InnoDB) |
-| Backend | Node.js, Express REST API, JWT authentication, MySQL connection pooling |
-| Frontend | React |
+---
 
-## Planned workflows
+## Technology Stack
 
-1. **Match completion:** a scorer submits frame scores and `sp_complete_match` records them, sets the winner, advances the bracket and updates ranking points in one transaction.
-2. **Leaderboard and reports:** rankings with `RANK()`, win streaks via window functions and CTEs, head-to-head records, table utilisation, weakest skills.
-3. **Booking and credit:** staff reserve a table while triggers reject overlaps and casual-player credit, and check credit limits and payments.
-4. **Inventory and coaching:** low-stock reorder flags, servicing history, skill assessments for team selection.
+| Layer | Choice | Details & Justification |
+|---|---|---|
+| **Database** | MySQL 8.0 (InnoDB) | Strict ACID compliance, foreign keys, row-level locking (`SELECT ... FOR UPDATE`), window functions, and recursive CTEs. |
+| **Backend API** | Node.js (v20+), Express 4.x | RESTful API service, `mysql2` connection pooling, `bcryptjs` password hashing, `jsonwebtoken`, and `express-validator`. |
+| **Frontend UI** | React 19, Vite | Modern Single-Page Application (SPA), Lucide icons, responsive layout, and role-based view guarding. |
 
-## Progress
+---
 
-| Component | Status | Verified In |
-| --- | --- | --- |
-| Requirements, ER/EER design, relational schema, normalization | Complete ✅ | [`docs/CueClub_MidSem_Report.pdf`](docs/CueClub_MidSem_Report.pdf) |
-| Schema DDL, constraints, triggers, procedures, views | Complete ✅ | `database/*.sql` (43 constraint tests) |
-| Least-Privilege API Role & REST Backend | Complete ✅ | `backend/` (31 automated tests in CI) |
-| Single-Page Application (SPA) Frontend | Complete ✅ | `frontend/` (React 19 + Vite) |
+## Major Application Workflows
+
+The application implements end-to-end workflows demonstrating distinct DBMS principles:
+
+1. **Workflow 1: Atomic Match Scoring & Bracket Progression (Multi-Relation Transaction)**
+   - *DBMS Aspect:* ACID transaction (`START TRANSACTION ... COMMIT / ROLLBACK`).
+   - *Behavior:* Scorer enters frame-by-frame scores and clicks "Finalize Match" $\rightarrow$ `sp_complete_match` parses frames, enforces no-drawn-frames (Rule R6), determines winner, advances winner to next round's feeder match (`player1_id` or `player2_id`), increments `Users.ranking_points`, and marks tournament `Completed` if finals. Any error triggers `ROLLBACK`.
+
+2. **Workflow 2: Tournament Bracket Hierarchy & Streak Analytics (Complex Retrieval & CTEs)**
+   - *DBMS Aspect:* Recursive CTE (`WITH RECURSIVE`) and window functions (`ROW_NUMBER() OVER`, `RANK() OVER`).
+   - *Behavior:* Frontend visualizes tournament trees via `v_bracket_tree`, which recursively traverses parent-child match relationships from the final round down to preliminary rounds; `v_win_streaks` computes active consecutive win streaks using the gaps-and-islands partition difference `(rn_all - rn_result)`.
+
+3. **Workflow 3: Table Booking & Credit Headroom Guard (Integrity & Concurrency Control)**
+   - *DBMS Aspect:* Row-level concurrency locking (`SELECT ... FOR UPDATE`) and exclusion triggers (`trg_reservation_bi`, `trg_ledger_bi`).
+   - *Behavior:* User selects a table and time slot $\rightarrow$ `sp_book_table` acquires an exclusive row lock on `Club_Member`, verifies available credit headroom via `v_member_balance`, and creates reservation. Double bookings are blocked with `SQLSTATE 45000` (Rule R1), and casual players or over-limit charges on credit are blocked (Rules R2, R3).
+
+---
+
+## Project Verification & Readiness
+
+| Component | Status | Verification Evidence |
+|---|---|---|
+| Requirements, ER/EER design, relational schema, normalization | Complete ✅ | [`docs/CueClub_MidSem_Report.pdf`](docs/CueClub_MidSem_Report.pdf) (Immutable) |
+| Schema DDL, constraints, triggers, procedures, views | Complete ✅ | `database/*.sql` (**43 constraint tests pass re-runnably**) |
+| Concurrency credit race protection | Complete ✅ | `database/tests/credit_race.sh` (**Thread race test passes**) |
+| Least-Privilege API Role & REST Backend | Complete ✅ | `backend/` (**31 automated integration tests pass in CI**) |
+| Single-Page Application (SPA) Frontend | Complete ✅ | `frontend/` (**10 contract tests pass, 0 oxlint errors, clean build**) |
+| GitHub Actions CI Pipeline | Green ✅ | [CI Run #43693260246](https://github.com/StuCCAn/DBMS-Project/actions) (3/3 jobs passed in 46s) |
 
 ## Repository Layout
 
