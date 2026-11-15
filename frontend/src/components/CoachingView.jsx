@@ -156,14 +156,25 @@ export default function CoachingView({ currentUser }) {
             </span>
           </h3>
           <div className="grid-3">
-            {weaknesses.map((w, idx) => (
-              <div key={idx} style={{ padding: 14, background: "var(--bg-secondary)", borderRadius: 8, border: "1px solid var(--border)" }}>
-                <div style={{ fontSize: 13, fontWeight: 700, color: "#fff" }}>{w.focus_area}</div>
-                <div style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 4 }}>
-                  Avg Rating: <strong style={{ color: Number(w.avg_rating) < 6 ? "#f87171" : "var(--accent-green)" }}>{Number(w.avg_rating).toFixed(1)}/10</strong> ({w.assessments_count} drills)
+            {weaknesses.map((w, idx) => {
+              const skillTitle = w.skill_area || w.focus_area || "Skill Area";
+              const rawRating = w.rating !== undefined ? w.rating : w.avg_rating;
+              const ratingNum = rawRating !== undefined && rawRating !== null ? Number(rawRating) : null;
+              const rankInfo = w.weakness_rank ? `Priority #${w.weakness_rank}` : (w.assessments_count ? `${w.assessments_count} drills` : "");
+              return (
+                <div key={idx} style={{ padding: 14, background: "var(--bg-secondary)", borderRadius: 8, border: "1px solid var(--border)" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <span style={{ fontSize: 13, fontWeight: 700, color: "#fff" }}>{skillTitle}</span>
+                    {w.name && <span style={{ fontSize: 11, color: "var(--text-dim)" }}>{w.name}</span>}
+                  </div>
+                  <div style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 4 }}>
+                    Rating: <strong style={{ color: ratingNum !== null && ratingNum < 6 ? "#f87171" : "var(--accent-green)" }}>
+                      {ratingNum !== null && !isNaN(ratingNum) ? `${ratingNum.toFixed(1)}/10` : "—"}
+                    </strong> {rankInfo && <span style={{ marginLeft: 6, fontSize: 11, color: "var(--accent-purple)" }}>({rankInfo})</span>}
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}
@@ -189,24 +200,33 @@ export default function CoachingView({ currentUser }) {
                 </tr>
               </thead>
               <tbody>
-                {history.map((h, idx) => (
-                  <tr key={idx}>
-                    <td>{new Date(h.assessment_date).toLocaleDateString()}</td>
-                    <td>
-                      <strong>{h.player_name || `Player #${h.player_id}`}</strong>
-                    </td>
-                    <td>{h.coach_name || `Coach #${h.assessed_by}`}</td>
-                    <td>
-                      <span className="badge badge-ongoing">{h.focus_area || h.skill_area}</span>
-                    </td>
-                    <td>
-                      <strong style={{ fontSize: 15, color: Number(h.rating) >= 7 ? "var(--accent-green)" : Number(h.rating) >= 5 ? "#fbbf24" : "#f87171" }}>
-                        {h.rating} / 10
-                      </strong>
-                    </td>
-                    <td>{h.notes || "—"}</td>
-                  </tr>
-                ))}
+                {history.map((h, idx) => {
+                  const rawDate = h.assessed_on || h.assessment_date || h.created_at;
+                  let dateStr = "—";
+                  if (rawDate) {
+                    const parsed = new Date(rawDate);
+                    dateStr = isNaN(parsed.getTime()) ? String(rawDate).split("T")[0] : parsed.toLocaleDateString();
+                  }
+
+                  return (
+                    <tr key={h.assessment_id || idx}>
+                      <td>{dateStr}</td>
+                      <td>
+                        <strong>{h.player_name || `Player #${h.player_id}`}</strong>
+                      </td>
+                      <td>{h.coach_name || `Coach #${h.assessed_by}`}</td>
+                      <td>
+                        <span className="badge badge-ongoing">{h.skill_area || h.focus_area}</span>
+                      </td>
+                      <td>
+                        <strong style={{ fontSize: 15, color: Number(h.rating) >= 7 ? "var(--accent-green)" : Number(h.rating) >= 5 ? "#fbbf24" : "#f87171" }}>
+                          {h.rating} / 10
+                        </strong>
+                      </td>
+                      <td>{h.notes || "—"}</td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>

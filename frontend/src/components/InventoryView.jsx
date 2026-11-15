@@ -127,14 +127,19 @@ export default function InventoryView({ currentUser }) {
             </h3>
           </div>
           <div className="grid-3">
-            {alerts.map((a) => (
-              <div key={a.item_id} style={{ padding: 12, background: "var(--bg-secondary)", borderRadius: 8, border: "1px solid var(--border)" }}>
-                <div style={{ fontWeight: 700, color: "#fff", fontSize: 13 }}>{a.item_name}</div>
-                <div style={{ fontSize: 12, color: "#f87171", marginTop: 4, fontWeight: 600 }}>
-                  Current Stock: {a.quantity_available} (Reorder Min: {a.reorder_level})
+            {alerts.map((a) => {
+              const alertName = a.name || a.item_name || `Item #${a.item_id}`;
+              const alertQty = a.quantity !== undefined ? a.quantity : (a.quantity_available !== undefined ? a.quantity_available : 0);
+              const alertRlvl = a.reorder_level !== undefined ? a.reorder_level : 0;
+              return (
+                <div key={a.item_id} style={{ padding: 12, background: "var(--bg-secondary)", borderRadius: 8, border: "1px solid var(--border)" }}>
+                  <div style={{ fontWeight: 700, color: "#fff", fontSize: 13 }}>{alertName}</div>
+                  <div style={{ fontSize: 12, color: "#f87171", marginTop: 4, fontWeight: 600 }}>
+                    Current Stock: {alertQty} (Reorder Min: {alertRlvl})
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}
@@ -161,71 +166,76 @@ export default function InventoryView({ currentUser }) {
                 </tr>
               </thead>
               <tbody>
-                {items.map((item) => (
-                  <tr key={item.item_id}>
-                    <td>#{item.item_id}</td>
-                    <td>
-                      <strong>{item.item_name}</strong>
-                    </td>
-                    <td>{item.category}</td>
-                    <td>
-                      <span style={{ fontWeight: 700, color: item.quantity_available <= item.reorder_level ? "#f87171" : "var(--accent-green)" }}>
-                        {item.quantity_available} units
-                      </span>
-                    </td>
-                    <td>{item.reorder_level} units</td>
-                    <td>
-                      {canManage ? (
-                        <select
-                          className="form-select"
-                          style={{ padding: "4px 8px", fontSize: 12, width: 130 }}
-                          value={item.condition_status}
-                          onChange={(e) => handleConditionChange(item.item_id, e.target.value)}
-                        >
-                          <option value="Good">Good</option>
-                          <option value="Needs Service">Needs Service</option>
-                          <option value="Damaged">Damaged</option>
-                          <option value="Retired">Retired</option>
-                        </select>
-                      ) : (
-                        <span className={`badge badge-${(item.condition_status || "").toLowerCase().replace(/\s+/g, "-")}`}>
-                          {item.condition_status}
-                        </span>
-                      )}
-                    </td>
-                    {canManage && (
+                {items.map((item) => {
+                  const itemName = item.name || item.item_name || `Item #${item.item_id}`;
+                  const qty = item.quantity !== undefined ? item.quantity : (item.quantity_available !== undefined ? item.quantity_available : 0);
+                  const rlvl = item.reorder_level !== undefined ? item.reorder_level : 0;
+                  return (
+                    <tr key={item.item_id}>
+                      <td>#{item.item_id}</td>
                       <td>
-                        <div style={{ display: "flex", gap: 6 }}>
-                          <button
-                            className="btn btn-secondary btn-sm"
-                            style={{ padding: "4px 8px" }}
-                            title="Decrement stock (-1)"
-                            onClick={() => handleStockDelta(item.item_id, -1)}
-                            disabled={item.quantity_available <= 0}
-                          >
-                            <Minus size={12} />
-                          </button>
-                          <button
-                            className="btn btn-secondary btn-sm"
-                            style={{ padding: "4px 8px" }}
-                            title="Increment stock (+1)"
-                            onClick={() => handleStockDelta(item.item_id, 1)}
-                          >
-                            <Plus size={12} />
-                          </button>
-                          <button
-                            className="btn btn-secondary btn-sm"
-                            style={{ padding: "4px 8px", fontSize: 11 }}
-                            title="Bulk Restock (+10)"
-                            onClick={() => handleStockDelta(item.item_id, 10)}
-                          >
-                            +10
-                          </button>
-                        </div>
+                        <strong>{itemName}</strong>
                       </td>
-                    )}
-                  </tr>
-                ))}
+                      <td>{item.category}</td>
+                      <td>
+                        <span style={{ fontWeight: 700, color: qty <= rlvl ? "#f87171" : "var(--accent-green)" }}>
+                          {qty} units
+                        </span>
+                      </td>
+                      <td>{rlvl} units</td>
+                      <td>
+                        {canManage ? (
+                          <select
+                            className="form-select"
+                            style={{ padding: "4px 8px", fontSize: 12, width: 130 }}
+                            value={item.condition_status}
+                            onChange={(e) => handleConditionChange(item.item_id, e.target.value)}
+                          >
+                            <option value="Good">Good</option>
+                            <option value="Needs Service">Needs Service</option>
+                            <option value="Damaged">Damaged</option>
+                            <option value="Retired">Retired</option>
+                          </select>
+                        ) : (
+                          <span className={`badge badge-${(item.condition_status || "").toLowerCase().replace(/\s+/g, "-")}`}>
+                            {item.condition_status}
+                          </span>
+                        )}
+                      </td>
+                      {canManage && (
+                        <td>
+                          <div style={{ display: "flex", gap: 6 }}>
+                            <button
+                              className="btn btn-secondary btn-sm"
+                              style={{ padding: "4px 8px" }}
+                              title="Decrement stock (-1)"
+                              onClick={() => handleStockDelta(item.item_id, -1)}
+                              disabled={qty <= 0}
+                            >
+                              <Minus size={12} />
+                            </button>
+                            <button
+                              className="btn btn-secondary btn-sm"
+                              style={{ padding: "4px 8px" }}
+                              title="Increment stock (+1)"
+                              onClick={() => handleStockDelta(item.item_id, 1)}
+                            >
+                              <Plus size={12} />
+                            </button>
+                            <button
+                              className="btn btn-secondary btn-sm"
+                              style={{ padding: "4px 8px", fontSize: 11 }}
+                              title="Bulk Restock (+10)"
+                              onClick={() => handleStockDelta(item.item_id, 10)}
+                            >
+                              +10
+                            </button>
+                          </div>
+                        </td>
+                      )}
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>

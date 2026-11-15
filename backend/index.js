@@ -1148,7 +1148,12 @@ app.post(
 app.get("/api/inventory", authenticateToken, requireRole("Admin", "Staff"), async (req, res) => {
     try {
         const [rows] = await pool.query("SELECT * FROM v_inventory_catalog");
-        res.json({ status: "success", data: rows });
+        const mapped = rows.map((r) => ({
+            ...r,
+            item_name: r.name,
+            quantity_available: r.quantity
+        }));
+        res.json({ status: "success", data: mapped });
     } catch (error) {
         sendDbError(res, error, "Failed to fetch inventory");
     }
@@ -1157,7 +1162,12 @@ app.get("/api/inventory", authenticateToken, requireRole("Admin", "Staff"), asyn
 app.get("/api/inventory/reorder-alerts", authenticateToken, requireRole("Admin", "Staff"), async (req, res) => {
     try {
         const [rows] = await pool.query("SELECT * FROM v_reorder_alerts");
-        res.json({ status: "success", data: rows });
+        const mapped = rows.map((r) => ({
+            ...r,
+            item_name: r.name,
+            quantity_available: r.quantity
+        }));
+        res.json({ status: "success", data: mapped });
     } catch (error) {
         sendDbError(res, error, "Failed to fetch reorder alerts");
     }
@@ -1313,7 +1323,12 @@ app.get("/api/coaching/history", authenticateToken, async (req, res) => {
         }
 
         const [rows] = await pool.query(query, params);
-        res.json({ status: "success", data: rows });
+        const mapped = rows.map((r) => ({
+            ...r,
+            assessment_date: r.assessed_on,
+            focus_area: r.skill_area
+        }));
+        res.json({ status: "success", data: mapped });
     } catch (error) {
         sendDbError(res, error, "Failed to fetch coaching history");
     }
@@ -1347,7 +1362,12 @@ app.get("/api/coaching/weaknesses", authenticateToken, async (req, res) => {
         }
 
         const [rows] = await pool.query(query, params);
-        res.json({ status: "success", data: rows });
+        const mapped = rows.map((r) => ({
+            ...r,
+            focus_area: r.skill_area,
+            avg_rating: r.rating
+        }));
+        res.json({ status: "success", data: mapped });
     } catch (error) {
         sendDbError(res, error, "Failed to fetch player weaknesses");
     }
