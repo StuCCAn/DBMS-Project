@@ -15,7 +15,7 @@ Cue clubs tend to run on paper registers and the manager's memory, so bookings o
 - **Course:** CS F212 Database Systems | Final Project Submission
 - **Deadline:** Sunday, 15 November 2026, 11:59 PM
 - **Git Submission Tag:** `final`
-- **Submitted Commit Hash:** `4dcc4c38af360d1f685fc9d44caec3129888bb1b` (Tagged as `final`)
+- **Submitted Commit Hash:** `27570b6232a7bd8a5cc6ce48f3183f01a7fc01ec` (Tagged as `final`)
 - **Repository Link:** [https://github.com/StuCCAn/DBMS-Project](https://github.com/StuCCAn/DBMS-Project)
 - **Evaluation Checkout:**
   ```bash
