@@ -16,6 +16,11 @@ function getDefaultTimes() {
   };
 }
 
+function getTableDisplayName(table) {
+  if (!table) return "Table";
+  return table.name || table.table_name || (table.table_number ? `Table ${table.table_number}` : `Table #${table.table_id}`);
+}
+
 export default function TablesView({ currentUser }) {
   const [tables, setTables] = useState([]);
   const [reservations, setReservations] = useState([]);
@@ -36,6 +41,7 @@ export default function TablesView({ currentUser }) {
   const [submittingBooking, setSubmittingBooking] = useState(false);
 
   const canManageTables = currentUser?.app_role === "Admin" || currentUser?.app_role === "Staff";
+  const canBook = currentUser?.app_role === "Admin" || currentUser?.app_role === "Staff" || currentUser?.app_role === "Member";
 
   const loadData = useCallback(async () => {
     if (!getToken()) {
@@ -92,7 +98,7 @@ export default function TablesView({ currentUser }) {
     const nextStatus = table.status === "Available" ? "Maintenance" : "Available";
     try {
       await setTableStatus(table.table_id, nextStatus);
-      setSuccess(`Table ${table.table_number} status updated to ${nextStatus}`);
+      setSuccess(`${getTableDisplayName(table)} status updated to ${nextStatus}`);
       setTimeout(() => setSuccess(null), 3000);
       loadData();
     } catch (err) {
@@ -130,7 +136,7 @@ export default function TablesView({ currentUser }) {
         payStatus: paymentStatus
       });
 
-      setSuccess(`Booking confirmed for ${selectedTable.table_name || selectedTable.table_number}!`);
+      setSuccess(`Booking confirmed for ${getTableDisplayName(selectedTable)}!`);
       setTimeout(() => setSuccess(null), 3000);
       setBookingModalOpen(false);
       loadData();
@@ -190,7 +196,7 @@ export default function TablesView({ currentUser }) {
                   {t.game_type}
                 </span>
                 <h3 style={{ fontSize: 18, fontWeight: 700, color: "#fff", marginTop: 2 }}>
-                  {t.table_name || `Table ${t.table_number}`}
+                  {getTableDisplayName(t)}
                 </h3>
               </div>
               <span className={`badge badge-${t.status.toLowerCase()}`}>
@@ -203,8 +209,8 @@ export default function TablesView({ currentUser }) {
               <div>Frame: <strong>₹{t.per_frame_rate}</strong> / frame</div>
             </div>
 
-            <div style={{ display: "flex", gap: 8 }}>
-              {t.status === "Available" && (
+            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+              {t.status === "Available" && canBook && (
                 <button
                   className="btn btn-primary btn-sm"
                   style={{ flex: 1 }}
@@ -213,6 +219,11 @@ export default function TablesView({ currentUser }) {
                   <Calendar size={14} />
                   Book Table
                 </button>
+              )}
+              {t.status === "Available" && !canBook && (
+                <span style={{ fontSize: 12, color: "var(--text-dim)", fontStyle: "italic", flex: 1 }}>
+                  Book at club desk
+                </span>
               )}
 
               {canManageTables && (
@@ -260,35 +271,45 @@ export default function TablesView({ currentUser }) {
                 </tr>
               </thead>
               <tbody>
-                {reservations.map((r) => (
-                  <tr key={r.reservation_id}>
-                    <td>#{r.reservation_id}</td>
-                    <td>
-                      <strong>{r.user_name || `User #${r.user_id}`}</strong>
-                    </td>
-                    <td>{r.table_name || `Table ${r.table_number}`}</td>
-                    <td>{new Date(r.start_time).toLocaleString()}</td>
-                    <td>{new Date(r.end_time).toLocaleTimeString()}</td>
-                    <td>{r.billing_mode} {r.billing_mode === "PerFrame" ? `(${r.frames_played}f)` : ""}</td>
-                    <td>₹{r.total_amount}</td>
-                    <td>
-                      <span className={`badge badge-${r.payment_status.toLowerCase()}`}>
-                        {r.payment_status}
-                      </span>
-                    </td>
-                    <td>
-                      {r.payment_status !== "Cancelled" && (
-                        <button
-                          className="btn btn-danger btn-sm"
-                          style={{ padding: "4px 8px", fontSize: 11 }}
-                          onClick={() => handleCancelBooking(r.reservation_id)}
-                        >
-                          <X size={12} /> Cancel
-                        </button>
-                      )}
-                    </td>
-                  </tr>
-                ))}
+                {reservations.map((r) => {
+                  const canCancelThisBooking = (
+                    currentUser?.app_role === "Admin" ||
+                    currentUser?.app_role === "Staff" ||
+                    (currentUser?.app_role === "Member" && Number(r.user_id) === Number(currentUser?.user_id))
+                  ) && r.payment_status !== "Cancelled";
+
+                  return (
+                    <tr key={r.reservation_id}>
+                      <td>#{r.reservation_id}</td>
+                      <td>
+                        <strong>{r.user_name || `User #${r.user_id}`}</strong>
+                      </td>
+                      <td>{r.table_name || r.name || (r.table_number ? `Table ${r.table_number}` : `Table #${r.table_id}`)}</td>
+                      <td>{new Date(r.start_time).toLocaleString()}</td>
+                      <td>{new Date(r.end_time).toLocaleTimeString()}</td>
+                      <td>{r.billing_mode} {r.billing_mode === "PerFrame" ? `(${r.frames_played}f)` : ""}</td>
+                      <td>₹{r.total_amount}</td>
+                      <td>
+                        <span className={`badge badge-${r.payment_status.toLowerCase()}`}>
+                          {r.payment_status}
+                        </span>
+                      </td>
+                      <td>
+                        {canCancelThisBooking ? (
+                          <button
+                            className="btn btn-danger btn-sm"
+                            style={{ padding: "4px 8px", fontSize: 11 }}
+                            onClick={() => handleCancelBooking(r.reservation_id)}
+                          >
+                            <X size={12} /> Cancel
+                          </button>
+                        ) : (
+                          <span style={{ color: "var(--text-dim)" }}>—</span>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -300,7 +321,7 @@ export default function TablesView({ currentUser }) {
         <div className="modal-overlay">
           <div className="modal-dialog">
             <div className="modal-header">
-              <h3 className="modal-title">Book {selectedTable.table_name || `Table ${selectedTable.table_number}`}</h3>
+              <h3 className="modal-title">Book {getTableDisplayName(selectedTable)}</h3>
               <p className="page-description">{selectedTable.game_type} table reservation</p>
             </div>
 

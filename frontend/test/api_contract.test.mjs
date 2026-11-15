@@ -145,6 +145,24 @@ test("createMatch sends roundNumber, player IDs, and feeder links", async () => 
   });
 });
 
+test("recordCharge restricts and normalizes types to Canteen charge and Fine", async () => {
+  // Test direct valid Fine
+  await api.recordCharge(3, "Fine", 200, "Late return fee");
+  assert.equal(lastRequest.url, "/api/ledger/charge");
+  assert.equal(lastRequest.body.type, "Fine");
+  assert.equal(lastRequest.body.note, "Late return fee");
+
+  // Test mapping subcategory fine to Fine with note preserved
+  await api.recordCharge(3, "Damaged equipment fine", 350, "Broken cue tip");
+  assert.equal(lastRequest.body.type, "Fine");
+  assert.equal(lastRequest.body.note, "[Damaged equipment fine] Broken cue tip");
+
+  // Test Canteen charge
+  await api.recordCharge(3, "Canteen charge", 120, "Snacks & soda");
+  assert.equal(lastRequest.body.type, "Canteen charge");
+  assert.equal(lastRequest.body.note, "Snacks & soda");
+});
+
 test("Token management correctly stores and clears JWT", () => {
   api.setToken("test-jwt");
   assert.equal(api.getToken(), "test-jwt");

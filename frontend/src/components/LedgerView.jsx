@@ -336,10 +336,7 @@ export default function LedgerView({ currentUser }) {
                   <label className="form-label">Charge Category</label>
                   <select className="form-select" value={chargeType} onChange={(e) => setChargeType(e.target.value)}>
                     <option value="Canteen charge">Canteen charge</option>
-                    <option value="Damaged equipment fine">Damaged equipment fine</option>
-                    <option value="Late fee">Late fee</option>
-                    <option value="Tournament entry">Tournament entry</option>
-                    <option value="Coaching session">Coaching session</option>
+                    <option value="Fine">Fine (Equipment damage / Late fee / Penalty)</option>
                   </select>
                 </div>
                 <div className="form-group">

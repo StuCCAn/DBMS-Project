@@ -144,7 +144,30 @@ export async function recordPayment(userId, amount, note) {
 }
 
 export async function recordCharge(userId, type, amount, note) {
-  return apiRequest("/ledger/charge", "POST", { userId, type, amount, note });
+  let resolvedType = type;
+  let resolvedNote = note;
+
+  // Map any fine variants or subcategories to valid DB enum types: 'Canteen charge' | 'Fine'
+  if (type === "Fine" || type.toLowerCase().includes("fine") || type === "Late fee" || type === "Damaged equipment fine") {
+    resolvedType = "Fine";
+    if (type !== "Fine" && (!note || !note.includes(type))) {
+      resolvedNote = note ? `[${type}] ${note}` : `[${type}]`;
+    }
+  } else if (type === "Canteen charge") {
+    resolvedType = "Canteen charge";
+  } else {
+    resolvedType = "Canteen charge";
+    if (type && (!note || !note.includes(type))) {
+      resolvedNote = note ? `[${type}] ${note}` : `[${type}]`;
+    }
+  }
+
+  return apiRequest("/ledger/charge", "POST", {
+    userId: Number(userId),
+    type: resolvedType,
+    amount: Number(amount),
+    note: resolvedNote || null
+  });
 }
 
 export async function registerMember(data) {
