@@ -1,0 +1,24 @@
+{
+  "name": "dbms-project",
+  "version": "1.0.0",
+  "description": "A cue sports club and tournament management system, built as the DBMS course project for CS F212 (Database Systems) at BITS Pilani, Hyderabad Campus. Group 18.",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/StuCCAn/DBMS-Project.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/StuCCAn/DBMS-Project/issues"
+  },
+  "homepage": "https://github.com/StuCCAn/DBMS-Project#readme"
+}

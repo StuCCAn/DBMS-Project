@@ -79,5 +79,5 @@ GRANT EXECUTE ON PROCEDURE cueclub.sp_record_assessment TO 'cueclub_api'@'%';
 GRANT EXECUTE ON PROCEDURE cueclub.sp_update_inventory_stock TO 'cueclub_api'@'%';
 GRANT EXECUTE ON PROCEDURE cueclub.sp_set_inventory_condition TO 'cueclub_api'@'%';
 GRANT EXECUTE ON PROCEDURE cueclub.sp_deactivate_user TO 'cueclub_api'@'%';
-
+GRANT EXECUTE ON PROCEDURE cueclub.sp_create_match TO 'cueclub_api'@'%';
 FLUSH PRIVILEGES;
