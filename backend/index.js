@@ -218,11 +218,9 @@ async function authenticateToken(req, res, next) {
         const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
         // Immediate revocation check: deactivated users cannot make authenticated requests
-        const [rows] = await pool.query(
-            "SELECT is_active FROM Users WHERE user_id = ?",
-            [decoded.user_id]
-        );
-        if (!rows || rows.length === 0 || !rows[0].is_active) {
+        const [rows] = await pool.query("CALL sp_get_login(?)", [decoded.email]);
+        const users = rows[0];
+        if (!users || users.length === 0 || !users[0].is_active) {
             return res.status(403).json({
                 error: "User account is deactivated or no longer exists"
             });
@@ -393,16 +391,14 @@ app.put("/api/users/:id/password", authenticateToken, async (req, res) => {
                 return res.status(400).json({ error: "currentPassword is required to change password" });
             }
 
-            const [userRows] = await pool.query(
-                "SELECT password_hash FROM Users WHERE user_id = ?",
-                [targetUserId]
-            );
+            const [userRows] = await pool.query("CALL sp_get_login(?)", [req.user.email]);
+            const users = userRows[0];
 
-            if (!userRows || userRows.length === 0) {
+            if (!users || users.length === 0) {
                 return res.status(404).json({ error: "User not found" });
             }
 
-            const currentHash = userRows[0].password_hash;
+            const currentHash = users[0].password_hash;
             const isMatch = currentHash ? await bcrypt.compare(currentPassword, currentHash) : false;
             if (!isMatch) {
                 return res.status(400).json({ error: "Current password is incorrect" });

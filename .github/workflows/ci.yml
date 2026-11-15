@@ -198,7 +198,7 @@ jobs:
           DB_HOST: 127.0.0.1
           DB_PORT: 3306
           DB_USER: cueclub_api
-          DB_PASSWORD: api-secret-2026
+          DB_PASSWORD: cueclub_api_pw
           DB_NAME: cueclub
           JWT_SECRET: ci-pipeline-supersecret-jwt-key
         run: |

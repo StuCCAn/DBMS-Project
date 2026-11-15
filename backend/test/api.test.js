@@ -3,7 +3,7 @@ process.env.JWT_SECRET = process.env.JWT_SECRET || "ci-test-jwt-secret-key-32cha
 process.env.DB_HOST = process.env.DB_HOST || "127.0.0.1";
 process.env.DB_PORT = process.env.DB_PORT || "3306";
 process.env.DB_USER = process.env.DB_USER || "cueclub_api";
-process.env.DB_PASSWORD = process.env.DB_PASSWORD || "api-secret-2026";
+process.env.DB_PASSWORD = process.env.DB_PASSWORD || "cueclub_api_pw";
 process.env.DB_NAME = process.env.DB_NAME || "cueclub";
 
 const { test, describe, before, after } = require("node:test");
