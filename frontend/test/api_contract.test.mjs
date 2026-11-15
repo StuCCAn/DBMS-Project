@@ -163,6 +163,20 @@ test("recordCharge restricts and normalizes types to Canteen charge and Fine", a
   assert.equal(lastRequest.body.note, "Snacks & soda");
 });
 
+test("setTournamentStatus sends valid status to PATCH endpoint", async () => {
+  await api.setTournamentStatus(1, "Registration");
+  assert.equal(lastRequest.url, "/api/tournaments/1/status");
+  assert.equal(lastRequest.method, "PATCH");
+  assert.deepEqual(lastRequest.body, { status: "Registration" });
+});
+
+test("setInventoryCondition sends valid condition to PATCH endpoint", async () => {
+  await api.setInventoryCondition(5, "Needs Service");
+  assert.equal(lastRequest.url, "/api/inventory/5/condition");
+  assert.equal(lastRequest.method, "PATCH");
+  assert.deepEqual(lastRequest.body, { status: "Needs Service" });
+});
+
 test("Token management correctly stores and clears JWT", () => {
   api.setToken("test-jwt");
   assert.equal(api.getToken(), "test-jwt");

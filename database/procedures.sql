@@ -654,6 +654,11 @@ BEGIN
         SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Invalid tournament status: must be Draft, Registration, Ongoing, Completed, or Cancelled';
     END IF;
 
+    -- Completed status can only be achieved atomically via sp_complete_match
+    IF p_status = 'Completed' THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Invalid tournament status transition: Completed status can only be set via match completion';
+    END IF;
+
     START TRANSACTION;
         SELECT status INTO v_curr_status
           FROM Tournaments
@@ -668,8 +673,18 @@ BEGIN
             SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Invalid tournament status transition: Completed or Cancelled tournaments cannot change status';
         END IF;
 
-        IF v_curr_status = 'Ongoing' AND p_status IN ('Draft', 'Registration') THEN
-            SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Invalid tournament status transition: Ongoing tournament cannot revert to Draft or Registration';
+        IF p_status <> v_curr_status THEN
+            IF v_curr_status = 'Draft' AND p_status NOT IN ('Registration', 'Cancelled') THEN
+                SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Invalid tournament status transition: Draft tournament can only transition to Registration or Cancelled';
+            END IF;
+
+            IF v_curr_status = 'Registration' AND p_status NOT IN ('Ongoing', 'Cancelled') THEN
+                SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Invalid tournament status transition: Registration tournament can only transition to Ongoing or Cancelled';
+            END IF;
+
+            IF v_curr_status = 'Ongoing' AND p_status NOT IN ('Cancelled') THEN
+                SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Invalid tournament status transition: Ongoing tournament cannot revert to Draft or Registration';
+            END IF;
         END IF;
 
         UPDATE Tournaments

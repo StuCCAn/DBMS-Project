@@ -244,6 +244,15 @@ describe("CueClub API Integration Test Suite", () => {
             assert.match(res.data.error, /cannot change status|Invalid tournament status/i);
         });
 
+        test("Reject manual transition to Completed status (400)", async () => {
+            const res = await request("PATCH", "/api/tournaments/1/status", {
+                headers: { Authorization: `Bearer ${adminToken}` },
+                body: { status: "Completed" }
+            });
+            assert.equal(res.status, 400);
+            assert.match(res.data.error, /Completed status can only be set via match completion/i);
+        });
+
         test("Reject creating match with unregistered player (400)", async () => {
             const res = await request("POST", "/api/tournaments/2/matches", {
                 headers: { Authorization: `Bearer ${adminToken}` },

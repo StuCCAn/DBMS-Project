@@ -178,17 +178,17 @@ export default function InventoryView({ currentUser }) {
                       {canManage ? (
                         <select
                           className="form-select"
-                          style={{ padding: "4px 8px", fontSize: 12, width: 120 }}
+                          style={{ padding: "4px 8px", fontSize: 12, width: 130 }}
                           value={item.condition_status}
                           onChange={(e) => handleConditionChange(item.item_id, e.target.value)}
                         >
                           <option value="Good">Good</option>
-                          <option value="Fair">Fair</option>
+                          <option value="Needs Service">Needs Service</option>
                           <option value="Damaged">Damaged</option>
-                          <option value="InRepair">InRepair</option>
+                          <option value="Retired">Retired</option>
                         </select>
                       ) : (
-                        <span className={`badge badge-${item.condition_status.toLowerCase()}`}>
+                        <span className={`badge badge-${(item.condition_status || "").toLowerCase().replace(/\s+/g, "-")}`}>
                           {item.condition_status}
                         </span>
                       )}

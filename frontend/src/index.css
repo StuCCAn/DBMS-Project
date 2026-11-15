@@ -405,6 +405,9 @@ body {
 .badge-available { background: rgba(16, 185, 129, 0.15); color: #34d399; }
 .badge-maintenance { background: rgba(245, 158, 11, 0.15); color: #fbbf24; }
 .badge-retired { background: rgba(100, 116, 139, 0.2); color: #94a3b8; }
+.badge-good { background: rgba(16, 185, 129, 0.15); color: #34d399; }
+.badge-needs-service { background: rgba(245, 158, 11, 0.15); color: #fbbf24; }
+.badge-damaged { background: rgba(239, 68, 68, 0.15); color: #f87171; }
 
 .badge-draft { background: rgba(148, 163, 184, 0.15); color: #cbd5e1; }
 .badge-registration { background: rgba(59, 130, 246, 0.15); color: #60a5fa; }

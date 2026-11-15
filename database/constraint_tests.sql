@@ -933,7 +933,7 @@ BEGIN
         DECLARE CONTINUE HANDLER FOR SQLEXCEPTION SET v_err_count = v_err_count + 1;
         SET v_err_count = 0;
 
-        -- Create isolated temporary tournament fixture
+        -- Create isolated temporary tournament fixture (starts in 'Draft')
         CALL sp_create_tournament('Test Status Tournament', 'Snooker', 'Knockout', '2026-12-15', 100.00, v_tid);
 
         -- Rejection 1: Invalid status string
@@ -942,8 +942,26 @@ BEGIN
         -- Rejection 2: Non-existent tournament
         CALL sp_set_tournament_status(9999, 'Ongoing');
 
-        -- Success: Transition to 'Ongoing'
+        -- Rejection 3: Illegal transition Draft -> Ongoing (must enter Registration first)
         CALL sp_set_tournament_status(v_tid, 'Ongoing');
+
+        -- Rejection 4: Illegal manual transition Draft -> Completed
+        CALL sp_set_tournament_status(v_tid, 'Completed');
+
+        -- Success 1: Valid transition Draft -> Registration
+        CALL sp_set_tournament_status(v_tid, 'Registration');
+
+        -- Rejection 5: Illegal backward transition Registration -> Draft
+        CALL sp_set_tournament_status(v_tid, 'Draft');
+
+        -- Rejection 6: Illegal manual transition Registration -> Completed
+        CALL sp_set_tournament_status(v_tid, 'Completed');
+
+        -- Success 2: Valid transition Registration -> Ongoing
+        CALL sp_set_tournament_status(v_tid, 'Ongoing');
+
+        -- Rejection 7: Illegal manual transition Ongoing -> Completed
+        CALL sp_set_tournament_status(v_tid, 'Completed');
 
         SELECT status INTO v_new_status FROM Tournaments WHERE tournament_id = v_tid;
 
@@ -951,8 +969,8 @@ BEGIN
             40,
             'sp_set_tournament_status: Valid status transition succeeds, invalid status and non-existent tournament rejected',
             'SUCCESS',
-            IF(v_err_count = 2 AND v_new_status = 'Ongoing', 'SUCCESS', 'FAILED'),
-            (v_err_count = 2 AND v_new_status = 'Ongoing')
+            IF(v_err_count = 7 AND v_new_status = 'Ongoing', 'SUCCESS', 'FAILED'),
+            (v_err_count = 7 AND v_new_status = 'Ongoing')
         );
 
         -- Teardown temporary fixture
@@ -1038,16 +1056,28 @@ BEGIN
         DECLARE v_final_status VARCHAR(20) DEFAULT NULL;
         DECLARE CONTINUE HANDLER FOR SQLEXCEPTION SET v_err = v_err + 1;
 
-        -- Create tournament and transition to Completed
+        -- Create tournament and transition to Ongoing (via Registration)
         CALL sp_create_tournament('Test Terminal Status Tournament', 'Pool', 'Knockout', '2026-12-28', 50.00, v_tid);
+        CALL sp_set_tournament_status(v_tid, 'Registration');
         CALL sp_set_tournament_status(v_tid, 'Ongoing');
+
+        -- Rejection 1: Manual transition to Completed is rejected (must happen via sp_complete_match)
         CALL sp_set_tournament_status(v_tid, 'Completed');
 
-        -- Rejection 1: Completed -> Draft
+        -- Set status to Completed directly to simulate match completion for terminal state test
+        UPDATE Tournaments SET status = 'Completed' WHERE tournament_id = v_tid;
+
+        -- Rejection 2: Completed -> Draft
         CALL sp_set_tournament_status(v_tid, 'Draft');
 
-        -- Rejection 2: Completed -> Registration
+        -- Rejection 3: Completed -> Registration
         CALL sp_set_tournament_status(v_tid, 'Registration');
+
+        -- Rejection 4: Completed -> Ongoing
+        CALL sp_set_tournament_status(v_tid, 'Ongoing');
+
+        -- Rejection 5: Completed -> Cancelled
+        CALL sp_set_tournament_status(v_tid, 'Cancelled');
 
         SELECT status INTO v_final_status FROM Tournaments WHERE tournament_id = v_tid;
 
@@ -1055,8 +1085,8 @@ BEGIN
             43,
             'sp_set_tournament_status: Terminal states cannot be reverted (Completed -> Draft rejected)',
             'SUCCESS',
-            IF(v_err = 2 AND v_final_status = 'Completed', 'SUCCESS', 'FAILED'),
-            (v_err = 2 AND v_final_status = 'Completed')
+            IF(v_err = 5 AND v_final_status = 'Completed', 'SUCCESS', 'FAILED'),
+            (v_err = 5 AND v_final_status = 'Completed')
         );
 
         -- Teardown test fixture
