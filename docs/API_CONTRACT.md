@@ -18,7 +18,7 @@ The CueClub relational database encapsulates core business invariants, credit ac
    - **Member & Casual Registration:** `sp_register_member`, `sp_register_casual`
    - **Bookings & Lifecycle:** `sp_book_table`, `sp_cancel_booking`
    - **Credit Ledger:** `sp_record_payment`, `sp_record_charge`
-   - **Tournaments & Matches:** `sp_create_tournament`, `sp_set_tournament_status`, `sp_register_tournament_player`, `sp_complete_match`
+   - **Tournaments & Matches:** `sp_create_tournament`, `sp_set_tournament_status`, `sp_register_tournament_player`, `sp_create_match`, `sp_complete_match`
    - **Facilities & Equipment:** `sp_set_table_status`, `sp_update_inventory_stock`, `sp_set_inventory_condition`
    - **Coaching & Player Lifecycle:** `sp_record_assessment`, `sp_deactivate_user`
 3. **Atomic Operations:** Stored procedures manage their own transactions (`START TRANSACTION` ... `COMMIT`). In case of validation or constraint failure, procedures roll back automatically and return a formatted `SIGNAL SQLSTATE '45000'` with a descriptive error message.
@@ -619,6 +619,58 @@ CALL sp_set_tournament_status(
 |---|---|---|---|
 | `45000` | `sp_set_tournament_status` | `Invalid tournament status: must be Draft, Registration, Ongoing, Completed, or Cancelled` | `400 Bad Request` |
 | `45000` | `sp_set_tournament_status` | `Tournament not found` | `404 Not Found` |
+| `45000` | `sp_set_tournament_status` | `Invalid tournament status transition: Completed or Cancelled tournaments cannot change status` | `400 Bad Request` |
+| `45000` | `sp_set_tournament_status` | `Invalid tournament status transition: Ongoing tournament cannot revert to Draft or Registration` | `400 Bad Request` |
+
+---
+
+### 2.18 `sp_create_match`
+
+Creates a scheduled tournament match node in the bracket tree, validating tournament state, round numbers, player registrations, and the 2-feeder binary tree invariant.
+
+#### Signature
+```sql
+CALL sp_create_match(
+    IN  p_tournament_id  INT,
+    IN  p_round_number   INT,
+    IN  p_player1_id     INT,
+    IN  p_player2_id     INT,
+    IN  p_next_match_id  INT,
+    IN  p_table_id       INT,
+    IN  p_scheduled_time DATETIME,
+    OUT p_match_id       INT
+);
+```
+
+#### Parameters
+| Parameter | Type | Required | Description / Constraints |
+|---|---|---|---|
+| `p_tournament_id` | `INT` | Yes | Target tournament ID. Must exist and not be Completed or Cancelled. |
+| `p_round_number` | `INT` | Yes | Round index (>= 1). |
+| `p_player1_id` | `INT` | No | Registered player 1 ID (NULL for unpopulated future rounds). |
+| `p_player2_id` | `INT` | No | Registered player 2 ID (NULL for unpopulated future rounds). Must not equal player 1. |
+| `p_next_match_id` | `INT` | No | Match in later round fed by this match. Must belong to same tournament and have higher round number. Max 2 feeders per match. |
+| `p_table_id` | `INT` | No | Assigned game table ID. Must exist if provided. |
+| `p_scheduled_time` | `DATETIME` | No | Scheduled match timestamp. |
+| `p_match_id` | `INT` | OUT | Auto-generated match primary key. |
+
+#### REST API Mapping
+* **Endpoint:** `POST /api/tournaments/:id/matches`
+* **RBAC:** `Admin`, `Staff`
+
+#### Error Signals & SQLSTATE Codes
+| SQLSTATE | Procedure / Trigger | Error Message | HTTP Code |
+|---|---|---|---|
+| `45000` | `sp_create_match` | `Round number must be at least 1` | `400 Bad Request` |
+| `45000` | `sp_create_match` | `A match cannot pair a player against themselves` | `400 Bad Request` |
+| `45000` | `sp_create_match` | `Tournament not found` | `404 Not Found` |
+| `45000` | `sp_create_match` | `Cannot add matches to a completed or cancelled tournament` | `400 Bad Request` |
+| `45000` | `sp_create_match` | `Player 1 is not registered in this tournament` | `400 Bad Request` |
+| `45000` | `sp_create_match` | `Player 2 is not registered in this tournament` | `400 Bad Request` |
+| `45000` | `sp_create_match` | `Next round match not found` | `404 Not Found` |
+| `45000` | `sp_create_match` | `Next match must be a later round in the same tournament` | `400 Bad Request` |
+| `45000` | `sp_create_match` | `Next match already has two feeder matches assigned` | `409 Conflict` |
+| `45000` | `sp_create_match` | `Assigned game table not found` | `404 Not Found` |
 
 ---
 
@@ -704,6 +756,7 @@ Exposes longitudinal coaching evaluation history.
 | `GET /api/tournaments` | `v_tournaments_list` | ✅ | ✅ | ✅ | ✅ |
 | `POST /api/tournaments/:id/register`| `sp_register_tournament_player` | ✅ | ✅ | ✅ (Own) | ❌ |
 | `GET /api/tournaments/:id/registrations`| `v_tournament_registrations` | ✅ | ✅ | ✅ | ✅ |
+| `POST /api/tournaments/:id/matches` | `sp_create_match` | ✅ | ✅ | ❌ | ❌ |
 | `POST /api/matches/:id/complete` | `sp_complete_match` | ✅ | ✅ | ❌ | ❌ |
 | `GET /api/tournaments/:id/bracket` | `v_bracket_tree` | ✅ | ✅ | ✅ | ✅ |
 | `GET /api/leaderboard` | `v_leaderboard` | ✅ | ✅ | ✅ | ✅ |
@@ -725,5 +778,5 @@ Exposes longitudinal coaching evaluation history.
 | Role | Name | Responsibilities | Status |
 |---|---|---|:---:|
 | **Database & API Spec** | Manya Bhateja | Schema, Triggers, Stored Procedures, Views, Contract Definition | Signed Off ✅ |
-| **Backend Implementation** | Ananya Avunooru | Node.js, Express, Connection Pooling, Procedure Binding, JWT Auth | Pending Review ⏳ |
+| **Backend Implementation** | Ananya Avunooru | Node.js, Express, Connection Pooling, Procedure Binding, JWT Auth | Signed Off ✅ |
 | **Frontend UI & Presentation** | Ujjwal Chandak | React UI, Bracket View, Booking & Ledger Screen, Slides | Pending Review ⏳ |

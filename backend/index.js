@@ -3,8 +3,9 @@ require("dotenv").config({ path: path.join(__dirname, ".env") });
 
 const express = require("express");
 const pool = require("./db");
-const bcrypt = require("bcrypt");
+const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
+const { body, validationResult } = require("express-validator");
 
 if (!process.env.JWT_SECRET) {
     console.error("FATAL: JWT_SECRET is not defined in environment variables.");
@@ -17,21 +18,63 @@ const PORT = process.env.PORT || 3000;
 app.use(express.json());
 
 // ---------------------------------------------------------------------------
-// Helpers: Single-connection OUT parameter runner & MySQL error mapper
+// Helpers: Validation middleware, OUT runner with deadlock retry & Error mapper
 // ---------------------------------------------------------------------------
-async function callProcWithOut(callSql, params, selectOutSql) {
-    const conn = await pool.getConnection();
-    try {
-        await conn.query(callSql, params);
-        const [rows] = await conn.query(selectOutSql);
-        return rows[0];
-    } finally {
-        conn.release();
+function validate(validations) {
+    return async (req, res, next) => {
+        for (const validation of validations) {
+            const result = await validation.run(req);
+            if (result.errors.length) break;
+        }
+        const errors = validationResult(req);
+        if (errors.isEmpty()) {
+            return next();
+        }
+        return res.status(400).json({
+            error: errors.array()[0].msg
+        });
+    };
+}
+
+async function callProcWithOut(callSql, params, selectOutSql, maxRetries = 2) {
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+        const conn = await pool.getConnection();
+        try {
+            await conn.query(callSql, params);
+            const [rows] = await conn.query(selectOutSql);
+            return rows[0];
+        } catch (err) {
+            const isLockConflict =
+                err.errno === 1213 ||
+                err.errno === 1205 ||
+                err.code === "ER_LOCK_DEADLOCK" ||
+                err.code === "ER_LOCK_WAIT_TIMEOUT";
+            if (isLockConflict && attempt < maxRetries) {
+                // Jittered backoff between 20ms and 50ms before retrying
+                await new Promise((resolve) => setTimeout(resolve, 20 + Math.random() * 30));
+                continue;
+            }
+            throw err;
+        } finally {
+            conn.release();
+        }
     }
 }
 
 function sendDbError(res, error, contextMessage) {
     console.error(`${contextMessage}:`, error.message);
+
+    // Deadlock (1213) or lock wait timeout (1205) under concurrency
+    if (
+        error.errno === 1213 ||
+        error.errno === 1205 ||
+        error.code === "ER_LOCK_DEADLOCK" ||
+        error.code === "ER_LOCK_WAIT_TIMEOUT"
+    ) {
+        return res.status(503).json({
+            error: "Service temporarily unavailable due to concurrent lock conflict. Please retry."
+        });
+    }
 
     // MySQL 8 CHECK constraint violation (sqlState HY000, errno 3819)
     if (error.errno === 3819) {
@@ -160,7 +203,7 @@ app.post("/api/auth/login", async (req, res) => {
     }
 });
 
-function authenticateToken(req, res, next) {
+async function authenticateToken(req, res, next) {
     const authHeader = req.headers.authorization;
 
     if (!authHeader || !authHeader.startsWith("Bearer ")) {
@@ -173,6 +216,18 @@ function authenticateToken(req, res, next) {
 
     try {
         const decoded = jwt.verify(token, process.env.JWT_SECRET);
+
+        // Immediate revocation check: deactivated users cannot make authenticated requests
+        const [rows] = await pool.query(
+            "SELECT is_active FROM Users WHERE user_id = ?",
+            [decoded.user_id]
+        );
+        if (!rows || rows.length === 0 || !rows[0].is_active) {
+            return res.status(403).json({
+                error: "User account is deactivated or no longer exists"
+            });
+        }
+
         req.user = decoded;
         next();
     } catch (error) {
@@ -313,23 +368,45 @@ app.post("/api/casuals", authenticateToken, requireRole("Admin", "Staff"), async
 app.put("/api/users/:id/password", authenticateToken, async (req, res) => {
     try {
         const targetUserId = Number(req.params.id);
-        const { newPassword } = req.body;
+        const { currentPassword, newPassword } = req.body;
 
         if (!Number.isInteger(targetUserId) || targetUserId <= 0) {
             return res.status(400).json({ error: "Invalid user ID" });
         }
 
-        if (typeof newPassword !== "string" || newPassword.trim() === "") {
-            return res.status(400).json({ error: "newPassword is required" });
+        if (typeof newPassword !== "string" || newPassword.length < 6) {
+            return res.status(400).json({ error: "Password must be at least 6 characters" });
         }
 
-        if (
-            req.user.app_role !== "Admin" &&
-            Number(req.user.user_id) !== targetUserId
-        ) {
+        const isAdmin = req.user.app_role === "Admin";
+        const isSelf = Number(req.user.user_id) === targetUserId;
+
+        if (!isAdmin && !isSelf) {
             return res.status(403).json({
                 error: "You can only change your own password"
             });
+        }
+
+        // Self-change requires verification of currentPassword
+        if (isSelf) {
+            if (!currentPassword || typeof currentPassword !== "string") {
+                return res.status(400).json({ error: "currentPassword is required to change password" });
+            }
+
+            const [userRows] = await pool.query(
+                "SELECT password_hash FROM Users WHERE user_id = ?",
+                [targetUserId]
+            );
+
+            if (!userRows || userRows.length === 0) {
+                return res.status(404).json({ error: "User not found" });
+            }
+
+            const currentHash = userRows[0].password_hash;
+            const isMatch = currentHash ? await bcrypt.compare(currentPassword, currentHash) : false;
+            if (!isMatch) {
+                return res.status(400).json({ error: "Current password is incorrect" });
+            }
         }
 
         const passwordHash = await bcrypt.hash(newPassword, 10);
@@ -1116,6 +1193,11 @@ app.get("/api/admin/diagnostics", authenticateToken, requireRole("Admin"), async
     }
 });
 
-app.listen(PORT, () => {
-    console.log(`CueClub API running on port ${PORT}`);
-});
+let server;
+if (require.main === module) {
+    server = app.listen(PORT, () => {
+        console.log(`CueClub API running on port ${PORT}`);
+    });
+}
+
+module.exports = { app, pool };

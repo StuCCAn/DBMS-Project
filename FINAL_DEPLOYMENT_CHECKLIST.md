@@ -149,7 +149,7 @@ Complete each phase in order. The next phase begins only after the previous phas
 - [x] Use stored procedures and views rather than duplicating business rules in the API.
 - [x] Add request validation and consistent error responses.
 - [x] Add API tests for successful workflows and database-rejected operations.
-- [ ] Sign off API contracts before frontend integration.
+- [x] Sign off API contracts before frontend integration.
 
 ### Phase 6 — Ujjwal: frontend, integration, and documentation
 
