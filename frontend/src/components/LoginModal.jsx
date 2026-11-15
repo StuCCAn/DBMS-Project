@@ -32,9 +32,8 @@ export default function LoginModal({ isOpen, onClose, onLoginSuccess }) {
     }
   }
 
-  function fillDemo(demoEmail) {
-    setEmail(demoEmail);
-    setPassword("cueclub_default");
+  function handleSelectEmail(selectedEmail) {
+    setEmail(selectedEmail);
     setError(null);
   }
 
@@ -99,12 +98,9 @@ export default function LoginModal({ isOpen, onClose, onLoginSuccess }) {
           </form>
 
           <div style={{ marginTop: 20, paddingTop: 16, borderTop: "1px solid var(--border)" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+            <div style={{ marginBottom: 8 }}>
               <span style={{ fontSize: 11, fontWeight: 600, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.5px" }}>
-                Test Accounts Quick-Fill
-              </span>
-              <span style={{ fontSize: 11, color: "var(--text-dim)" }}>
-                pwd: <code style={{ color: "var(--accent-green)", background: "rgba(16, 185, 129, 0.1)", padding: "1px 4px", borderRadius: 3 }}>cueclub_default</code>
+                Test Accounts
               </span>
             </div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
@@ -112,7 +108,7 @@ export default function LoginModal({ isOpen, onClose, onLoginSuccess }) {
                 <button
                   key={acc.role}
                   type="button"
-                  onClick={() => fillDemo(acc.email)}
+                  onClick={() => handleSelectEmail(acc.email)}
                   className="btn btn-secondary btn-sm"
                   style={{
                     display: "flex",
@@ -121,7 +117,7 @@ export default function LoginModal({ isOpen, onClose, onLoginSuccess }) {
                     padding: "6px 10px",
                     fontSize: 11
                   }}
-                  title={`Quick-fill credentials for ${acc.role}`}
+                  title={`Use ${acc.email}`}
                 >
                   <span style={{ fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{acc.label}</span>
                   <span className={`user-role-pill ${acc.badge}`} style={{ fontSize: 9, padding: "1px 5px", marginLeft: 4 }}>{acc.role}</span>
