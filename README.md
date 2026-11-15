@@ -32,7 +32,7 @@ Cue clubs tend to run on paper registers and the manager's memory, so bookings o
 |---|---|---|
 | **Priyansh Thadhani** | `2024A3PS0356H` | **Database Architecture & Modeling:** Designed ER/EER model with Level-1 & Level-2 specialization, relational mapping to 11 relations, formal BCNF functional dependency proofs, and `docs/SCHEMA_MAPPING_AND_BASELINE.md`. |
 | **Goru Nikhil** | `2024A3PS0357H` | **Integrity Enforcement & Routines:** Implemented table/ledger triggers (`trg_reservation_bi`, `trg_ledger_bi`), CHECK boundaries, foreign-key rules, `sp_complete_match` multi-table atomic transaction with rollback, and concurrency locking (`SELECT ... FOR UPDATE`). |
-| **Ananya Avunooru** | `2024A3PS0367H` | **Backend API & Security:** Designed Node.js Express REST API (30 endpoints), least-privilege DB role (`roles.sql`), JWT authentication, `express-validator` schema rules, and 31 automated integration tests in CI. |
+| **Ananya Avunooru** | `2024A3PS0367H` | **Backend API & Security:** Designed Node.js Express REST API (38 REST endpoints), least-privilege DB role (`roles.sql`), JWT authentication, `express-validator` schema rules, and 34 automated integration tests in CI. |
 | **Manya Bhateja** | `2024A3PS0378H` | **Advanced SQL & Analytics:** Developed SQL views including recursive CTE binary bracket tree (`v_bracket_tree`), gaps-and-islands win streaks (`v_win_streaks`), table utilisation (`v_table_utilisation`), and 43 automated constraint test harness cases. |
 | **Ujjwal Chandak** | `2024A3PS0379H` | **Frontend Application & Integration:** Built React 19 SPA dashboard with Vite, role-aware routing, interactive bracket visualizer, frame-by-frame match scorer modal, credit ledger viewer, API client layer, and report compilation. |
 
@@ -70,7 +70,7 @@ Cue clubs tend to run on paper registers and the manager's memory, so bookings o
 | Layer | Choice | Details & Justification |
 |---|---|---|
 | **Database** | MySQL 8.0 (InnoDB) | Strict ACID compliance, foreign keys, row-level locking (`SELECT ... FOR UPDATE`), window functions, and recursive CTEs. |
-| **Backend API** | Node.js (v20+), Express 4.x | RESTful API service, `mysql2` connection pooling, `bcryptjs` password hashing, `jsonwebtoken`, and `express-validator`. |
+| **Backend API** | Node.js (v20+), Express 5.x | RESTful API service, `mysql2` connection pooling, `bcryptjs` password hashing, `jsonwebtoken`, and `express-validator`. |
 | **Frontend UI** | React 19, Vite | Modern Single-Page Application (SPA), Lucide icons, responsive layout, and role-based view guarding. |
 
 ---
@@ -100,7 +100,7 @@ The application implements end-to-end workflows demonstrating distinct DBMS prin
 | Requirements, ER/EER design, relational schema, normalization | Complete ✅ | [`docs/CueClub_MidSem_Report.pdf`](docs/CueClub_MidSem_Report.pdf) (Immutable) |
 | Schema DDL, constraints, triggers, procedures, views | Complete ✅ | `database/*.sql` (**43 constraint tests pass re-runnably**) |
 | Concurrency credit race protection | Complete ✅ | `database/tests/credit_race.sh` (**Thread race test passes**) |
-| Least-Privilege API Role & REST Backend | Complete ✅ | `backend/` (**31 automated integration tests pass in CI**) |
+| Least-Privilege API Role & REST Backend | Complete ✅ | `backend/` (**34 automated integration tests pass in CI**) |
 | Single-Page Application (SPA) Frontend | Complete ✅ | `frontend/` (**10 contract tests pass, 0 oxlint errors, clean build**) |
 | GitHub Actions CI Pipeline | Green ✅ | [CI Run #43693260246](https://github.com/StuCCAn/DBMS-Project/actions) (3/3 jobs passed in 46s) |
 
@@ -127,16 +127,13 @@ mysql -u root -p cueclub < database/triggers.sql
 mysql -u root -p cueclub < database/procedures.sql
 mysql -u root -p cueclub < database/views.sql
 mysql -u root -p cueclub < database/seed.sql
+mysql -u root -p cueclub < database/seed_volumetric.sql
 mysql -u root -p cueclub < database/roles.sql
 ```
 
-> [!TIP]
-> **Database Datasets:**
-> - `database/seed.sql` provides the clean, curated demonstration dataset (~68 records) ideal for concise 7-minute UI walkthroughs.
-> - `database/seed_volumetric.sql` (generated via `scripts/generate_large_seed.py`) provides an additive 646-record dataset bringing total database records to exactly **692 rows** across all 11 relations to satisfy the course project volumetric scope requirement:
->   ```bash
->   mysql -u root -p cueclub < database/seed_volumetric.sql
->   ```
+> [!NOTE]
+> **Database Datasets & Volumetric Scope (692 Total Records):**
+> Loading `database/seed.sql` (68 curated baseline records) followed by `database/seed_volumetric.sql` (624 additive records) populates exactly **692 total rows** across all 11 tables, fully satisfying the course project volumetric scope requirement (>500 records).
 
 To run the automated constraint verification suite (43 tests):
 ```bash
@@ -154,7 +151,7 @@ bash database/tests/credit_race.sh
 cd backend
 cp .env.example .env
 npm install
-npm test       # Runs the automated API test suite (31 tests)
+npm test       # Runs the automated API test suite (34 tests)
 npm start      # Binds REST API to http://localhost:3000
 ```
 

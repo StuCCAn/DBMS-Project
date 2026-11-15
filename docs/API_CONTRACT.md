@@ -742,6 +742,7 @@ Exposes longitudinal coaching evaluation history.
 | Endpoint / Operation | Procedure / View Called | Admin | Staff | Member | Casual |
 |---|---|:---:|:---:|:---:|:---:|
 | `POST /api/auth/login` | `sp_get_login` | ✅ | ✅ | ✅ | ✅ |
+| `POST /api/auth/register` | `sp_register_member` / `sp_register_casual` | ✅ | ✅ | ✅ | ✅ |
 | `PUT /api/users/:id/password` | `sp_set_password` | ✅ | ✅ (Own) | ✅ (Own) | ✅ (Own) |
 | `POST /api/members` | `sp_register_member` | ✅ | ✅ | ❌ | ❌ |
 | `POST /api/casuals` | `sp_register_casual` | ✅ | ✅ | ❌ | ❌ |

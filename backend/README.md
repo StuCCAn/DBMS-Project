@@ -83,6 +83,7 @@ See [`docs/API_CONTRACT.md`](../docs/API_CONTRACT.md) for full request/response 
 
 ### Authentication & Self-Service
 - `POST /api/auth/login` — Public login; returns JWT token and user profile.
+- `POST /api/auth/register` — Public user registration (Club Member or Casual Player); returns JWT token and user profile.
 - `GET /api/auth/me` — Authenticated user identity inspection.
 - `PUT /api/users/:id/password` — Change password (requires `currentPassword` for self-change; Admin can reset any user).
 
