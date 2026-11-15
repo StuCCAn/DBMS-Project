@@ -83,13 +83,18 @@ To run the automated constraint verification suite (43 tests):
 mysql -u root -p cueclub < database/constraint_tests.sql
 ```
 
+To run the concurrency credit-limit race test:
+```bash
+bash database/tests/credit_race.sh
+```
+
 ### 2. Backend API Service
 
 ```bash
 cd backend
 cp .env.example .env
 npm install
-npm test       # Runs the automated API test suite (24 tests)
+npm test       # Runs the automated API test suite (31 tests)
 npm start      # Binds REST API to http://localhost:3000
 ```
 
@@ -98,14 +103,17 @@ npm start      # Binds REST API to http://localhost:3000
 ```bash
 cd frontend
 npm install
+npm run lint   # Runs fast static analysis (oxlint)
+npm test       # Runs frontend API contract tests (10 tests)
 npm run dev    # Launches development server on http://localhost:5173
 ```
 
 ---
 
-## Demo Accounts & Test Credentials
+## Demo Accounts & Security Notice
 
-All pre-seeded demo accounts use the standard password: **`cueclub_default`**.
+> [!WARNING]
+> All pre-seeded demonstration accounts share the default development password: **`cueclub_default`**. Before public or production deployment, change `JWT_SECRET` in `backend/.env` to a cryptographically secure random value, and update all user passwords using the application's self-service password modal or `CALL sp_set_password(?, ?)`.
 
 | Persona | Name | Role | Email | Password |
 |---|---|---|---|---|

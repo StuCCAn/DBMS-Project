@@ -137,6 +137,34 @@ describe("CueClub API Integration Test Suite", () => {
             assert.equal(res.status, 200);
             assert.equal(res.data.user.email, "rohan@example.com");
         });
+
+        test("Deactivating a user immediately invalidates their active JWT token (403)", async () => {
+            // 1. Log in as Sahil Verma (User 6)
+            const loginRes = await request("POST", "/api/auth/login", {
+                body: { email: "sahil@example.com", password: "cueclub_default" }
+            });
+            assert.equal(loginRes.status, 200);
+            const sahilToken = loginRes.data.token;
+
+            // 2. Token works initially
+            const preRes = await request("GET", "/api/auth/me", {
+                headers: { Authorization: `Bearer ${sahilToken}` }
+            });
+            assert.equal(preRes.status, 200);
+
+            // 3. Admin deactivates User 6
+            const deactRes = await request("PATCH", "/api/users/6/deactivate", {
+                headers: { Authorization: `Bearer ${adminToken}` }
+            });
+            assert.equal(deactRes.status, 200);
+
+            // 4. Existing token is immediately rejected with 403 on subsequent requests
+            const postRes = await request("GET", "/api/auth/me", {
+                headers: { Authorization: `Bearer ${sahilToken}` }
+            });
+            assert.equal(postRes.status, 403);
+            assert.match(postRes.data.error, /deactivated/i);
+        });
     });
 
     describe("4. Password Update Rules & Security", () => {

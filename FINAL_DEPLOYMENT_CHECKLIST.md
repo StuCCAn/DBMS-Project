@@ -157,8 +157,8 @@ Complete each phase in order. The next phase begins only after the previous phas
 - [x] Create `frontend/` React scaffolding and build screens against mock responses from `docs/API_CONTRACT.md` in parallel with Phase 5.
 - [x] Implement login and role-aware navigation.
 - [x] Implement manager, staff/scorer, member, team, and casual-player screens.
-- [ ] Implement booking, credit ledger, tournament/bracket, scorer, leaderboard, inventory, and coaching screens.
-- [ ] Integrate every screen with the verified backend API.
+- [x] Implement booking, credit ledger, tournament/bracket, scorer, leaderboard, inventory, and coaching screens.
+- [x] Integrate every screen with the verified backend API.
 - [x] Add loading, empty, validation, and error states.
 - [x] Add the final schema mapping and approved D-01 explanation to end-semester documentation.
 - [x] Keep the immutable mid-semester report unchanged.
@@ -353,24 +353,24 @@ Complete each phase in order. The next phase begins only after the previous phas
 
 ## 5. Frontend/UI: demonstrate the report workflows
 
-- [ ] Create `frontend/`.
-- [ ] Add React project configuration.
-- [ ] Add login/authentication flow.
-- [ ] Add role-aware navigation.
-- [ ] Add the main dashboard.
-- [ ] Add screens for the report's manager, staff/scorer, member, team, and casual-player workflows.
-- [ ] Add table availability and booking screens.
-- [ ] Add the credit-ledger and outstanding-balance screen.
-- [ ] Add tournament registration and bracket screens.
-- [ ] Add scorer/match-completion screens.
-- [ ] Add leaderboard, win-streak, head-to-head, and utilisation report screens.
-- [ ] Add inventory/reorder and coaching-assessment screens.
-- [ ] Ensure UI terminology matches the report and final schema.
-- [ ] Add loading, empty, and error states.
-- [ ] Add form validation.
-- [ ] Add responsive layout.
-- [ ] Add frontend tests.
-- [ ] Add frontend startup instructions.
+- [x] Create `frontend/`.
+- [x] Add React project configuration.
+- [x] Add login/authentication flow.
+- [x] Add role-aware navigation.
+- [x] Add the main dashboard.
+- [x] Add screens for the report's manager, staff/scorer, member, team, and casual-player workflows.
+- [x] Add table availability and booking screens.
+- [x] Add the credit-ledger and outstanding-balance screen.
+- [x] Add tournament registration and bracket screens.
+- [x] Add scorer/match-completion screens.
+- [x] Add leaderboard, win-streak, head-to-head, and utilisation report screens.
+- [x] Add inventory/reorder and coaching-assessment screens.
+- [x] Ensure UI terminology matches the report and final schema.
+- [x] Add loading, empty, and error states.
+- [x] Add form validation.
+- [x] Add responsive layout.
+- [x] Add frontend tests.
+- [x] Add frontend startup instructions.
 
 ## 6. Deployment and documentation
 

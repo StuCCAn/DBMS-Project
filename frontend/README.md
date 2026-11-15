@@ -68,7 +68,13 @@ npm run dev
 ```
 The application will launch on `http://localhost:5173`. API requests to `/api` are automatically proxied to the backend at `http://localhost:3000`.
 
-### 2.3 Build for Production
+### 2.3 Run Linting & Contract Tests
+```bash
+npm run lint   # Fast static analysis using oxlint
+npm test       # Automated frontend contract tests (10 tests)
+```
+
+### 2.4 Build for Production
 ```bash
 npm run build
 ```

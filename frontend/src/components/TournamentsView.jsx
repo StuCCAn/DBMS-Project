@@ -326,7 +326,7 @@ export default function TournamentsView({ currentUser, onOpenScorer }) {
             </div>
 
             <div style={{ display: "flex", gap: 10 }}>
-              {selectedTournament.status === "Registration" && (
+              {selectedTournament.status === "Registration" && currentUser?.app_role !== "Casual" && (
                 <button className="btn btn-secondary btn-sm" onClick={() => setRegModal(true)}>
                   <Users size={14} />
                   Register Player

@@ -62,10 +62,20 @@ export default function App() {
   function handleLoginSuccess(user) {
     setUser(user);
     setLoginModalOpen(false);
+    setActiveTab("tables");
   }
 
-  const role = currentUser?.app_role || "Casual";
+  const role = currentUser?.app_role || currentUser?.role || "Casual";
   const isAdminOrStaff = role === "Admin" || role === "Staff";
+
+  const isTabAllowed = (tab) => {
+    if (tab === "tables" || tab === "tournaments" || tab === "leaderboard") return true;
+    if (tab === "ledger" || tab === "coaching") return role !== "Casual";
+    if (tab === "inventory" || tab === "analytics") return isAdminOrStaff;
+    return false;
+  };
+
+  const currentTab = isTabAllowed(activeTab) ? activeTab : "tables";
 
   return (
     <div className="app-container">
@@ -84,7 +94,7 @@ export default function App() {
         <ul className="nav-list">
           <li>
             <button
-              className={`nav-item-btn ${activeTab === "tables" ? "active" : ""}`}
+              className={`nav-item-btn ${currentTab === "tables" ? "active" : ""}`}
               onClick={() => setActiveTab("tables")}
             >
               <Calendar size={18} />
@@ -95,7 +105,7 @@ export default function App() {
           {role !== "Casual" && (
             <li>
               <button
-                className={`nav-item-btn ${activeTab === "ledger" ? "active" : ""}`}
+                className={`nav-item-btn ${currentTab === "ledger" ? "active" : ""}`}
                 onClick={() => setActiveTab("ledger")}
               >
                 <CreditCard size={18} />
@@ -106,7 +116,7 @@ export default function App() {
 
           <li>
             <button
-              className={`nav-item-btn ${activeTab === "tournaments" ? "active" : ""}`}
+              className={`nav-item-btn ${currentTab === "tournaments" ? "active" : ""}`}
               onClick={() => setActiveTab("tournaments")}
             >
               <Trophy size={18} />
@@ -116,7 +126,7 @@ export default function App() {
 
           <li>
             <button
-              className={`nav-item-btn ${activeTab === "leaderboard" ? "active" : ""}`}
+              className={`nav-item-btn ${currentTab === "leaderboard" ? "active" : ""}`}
               onClick={() => setActiveTab("leaderboard")}
             >
               <Swords size={18} />
@@ -127,7 +137,7 @@ export default function App() {
           {isAdminOrStaff && (
             <li>
               <button
-                className={`nav-item-btn ${activeTab === "inventory" ? "active" : ""}`}
+                className={`nav-item-btn ${currentTab === "inventory" ? "active" : ""}`}
                 onClick={() => setActiveTab("inventory")}
               >
                 <Package size={18} />
@@ -139,7 +149,7 @@ export default function App() {
           {role !== "Casual" && (
             <li>
               <button
-                className={`nav-item-btn ${activeTab === "coaching" ? "active" : ""}`}
+                className={`nav-item-btn ${currentTab === "coaching" ? "active" : ""}`}
                 onClick={() => setActiveTab("coaching")}
               >
                 <GraduationCap size={18} />
@@ -151,7 +161,7 @@ export default function App() {
           {isAdminOrStaff && (
             <li>
               <button
-                className={`nav-item-btn ${activeTab === "analytics" ? "active" : ""}`}
+                className={`nav-item-btn ${currentTab === "analytics" ? "active" : ""}`}
                 onClick={() => setActiveTab("analytics")}
               >
                 <BarChart3 size={18} />
@@ -214,18 +224,18 @@ export default function App() {
 
       {/* Main View Area */}
       <main className="main-content">
-        {activeTab === "tables" && <TablesView currentUser={currentUser} />}
-        {activeTab === "ledger" && <LedgerView currentUser={currentUser} />}
-        {activeTab === "tournaments" && (
+        {currentTab === "tables" && <TablesView currentUser={currentUser} />}
+        {currentTab === "ledger" && role !== "Casual" && <LedgerView currentUser={currentUser} />}
+        {currentTab === "tournaments" && (
           <TournamentsView
             currentUser={currentUser}
             onOpenScorer={(match) => setScoringMatch(match)}
           />
         )}
-        {activeTab === "leaderboard" && <LeaderboardView />}
-        {activeTab === "inventory" && <InventoryView currentUser={currentUser} />}
-        {activeTab === "coaching" && <CoachingView currentUser={currentUser} />}
-        {activeTab === "analytics" && <AnalyticsView currentUser={currentUser} />}
+        {currentTab === "leaderboard" && <LeaderboardView />}
+        {currentTab === "inventory" && isAdminOrStaff && <InventoryView currentUser={currentUser} />}
+        {currentTab === "coaching" && role !== "Casual" && <CoachingView currentUser={currentUser} />}
+        {currentTab === "analytics" && isAdminOrStaff && <AnalyticsView currentUser={currentUser} />}
       </main>
 
       {/* Modals */}
