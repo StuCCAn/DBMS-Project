@@ -197,7 +197,7 @@ export default function App() {
                 <button
                   className="btn btn-secondary btn-sm"
                   onClick={() => setLoginModalOpen(true)}
-                  title="Switch Persona"
+                  title="Switch Account"
                 >
                   <UserCheck size={13} />
                 </button>

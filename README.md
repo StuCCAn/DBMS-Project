@@ -174,11 +174,14 @@ npm run dev    # Launches development server on http://localhost:5173
 > [!WARNING]
 > All pre-seeded demonstration accounts share the default development password: **`cueclub_default`**. Before public or production deployment, change `JWT_SECRET` in `backend/.env` to a cryptographically secure random value, and update all user passwords using the application's self-service password modal or `CALL sp_set_password(?, ?)`.
 
-| Persona | Name | Role | Email | Password |
+| Role | Recommended Login | Underlying Identity | Password | Permissions & Focus |
 |---|---|---|---|---|
-| **Admin** | Rohan Mehta | `Admin` | `rohan@example.com` | `cueclub_default` |
-| **Staff** | Imran Sheikh | `Staff` | `imran@example.com` | `cueclub_default` |
-| **Member** | Aarav Nair | `Member` | `aarav@example.com` | `cueclub_default` |
-| **Casual** | Vikram Singh | `Casual` | `vikram@example.com` | `cueclub_default` |
+| **Admin** | `admin@example.com` | Rohan Mehta (`rohan@example.com`) | `cueclub_default` | Full administrative control, diagnostics, user management, analytics |
+| **Staff** | `staff@example.com` | Imran Sheikh (`imran@example.com`) | `cueclub_default` | Match scoring, tournament setup, ledger charges & payments |
+| **Member** | `member@example.com` | Aarav Nair (`aarav@example.com`) | `cueclub_default` | Book tables on credit, view own ledger balance & coaching progress |
+| **Casual** | `casual@example.com` | Vikram Singh (`vikram@example.com`) | `cueclub_default` | Pay-and-play casual player, browse tables & leaderboard |
+
+> [!TIP]
+> Both the generic test emails (`admin@example.com`, etc.) and the original seed emails are accepted by the authentication endpoint. The login dialog provides convenient one-click quick-fill buttons for fast testing.
 
 

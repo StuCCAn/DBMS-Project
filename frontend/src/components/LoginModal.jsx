@@ -1,12 +1,12 @@
 import React, { useState } from "react";
 import { login } from "../api";
-import { AlertCircle, CheckCircle } from "lucide-react";
+import { AlertCircle, X } from "lucide-react";
 
-const DEMO_PERSONAS = [
-  { role: "Admin", name: "Rohan Mehta", email: "rohan@example.com", badge: "role-admin", desc: "Full administrative control, diagnostics, user management" },
-  { role: "Staff", name: "Imran Sheikh", email: "imran@example.com", badge: "role-staff", desc: "Match scorer, table manager, ledger charges & payments" },
-  { role: "Member", name: "Aarav Nair", email: "aarav@example.com", badge: "role-member", desc: "Book on credit, view own balance & coaching progress" },
-  { role: "Casual", name: "Vikram Singh", email: "vikram@example.com", badge: "role-casual", desc: "Pay-and-play casual player, view tables & leaderboard" },
+const DEMO_ACCOUNTS = [
+  { role: "Admin", label: "admin@example.com", email: "admin@example.com", badge: "role-admin" },
+  { role: "Staff", label: "staff@example.com", email: "staff@example.com", badge: "role-staff" },
+  { role: "Member", label: "member@example.com", email: "member@example.com", badge: "role-member" },
+  { role: "Casual", label: "casual@example.com", email: "casual@example.com", badge: "role-casual" },
 ];
 
 export default function LoginModal({ isOpen, onClose, onLoginSuccess }) {
@@ -32,20 +32,28 @@ export default function LoginModal({ isOpen, onClose, onLoginSuccess }) {
     }
   }
 
-  function handlePersonaSelect(persona) {
-    setEmail(persona.email);
-    setPassword("");
+  function fillDemo(demoEmail) {
+    setEmail(demoEmail);
+    setPassword("cueclub_default");
     setError(null);
   }
 
   return (
     <div className="modal-overlay">
-      <div className="modal-dialog" style={{ maxWidth: 520 }}>
+      <div className="modal-dialog" style={{ maxWidth: 440 }}>
         <div className="modal-header">
           <div>
             <h3 className="modal-title">Sign in to CueClub</h3>
-            <p className="page-description">Select a pre-configured persona or enter custom credentials</p>
+            <p className="page-description">Enter your account credentials to access the platform</p>
           </div>
+          <button
+            type="button"
+            onClick={onClose}
+            style={{ background: "none", border: "none", color: "var(--text-muted)", cursor: "pointer" }}
+            title="Close"
+          >
+            <X size={18} />
+          </button>
         </div>
         <div className="modal-body">
           {error && (
@@ -55,47 +63,17 @@ export default function LoginModal({ isOpen, onClose, onLoginSuccess }) {
             </div>
           )}
 
-          <div style={{ marginBottom: 20 }}>
-            <span className="form-label" style={{ marginBottom: 10 }}>Quick-Select Test Persona</span>
-            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              {DEMO_PERSONAS.map((p) => (
-                <div
-                  key={p.role}
-                  onClick={() => handlePersonaSelect(p)}
-                  style={{
-                    padding: "10px 14px",
-                    borderRadius: 8,
-                    border: email === p.email ? "1px solid var(--accent-green)" : "1px solid var(--border)",
-                    background: email === p.email ? "rgba(16, 185, 129, 0.08)" : "var(--bg-secondary)",
-                    cursor: "pointer",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "space-between"
-                  }}
-                >
-                  <div>
-                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                      <span style={{ fontWeight: 600, color: "#fff", fontSize: 13 }}>{p.name}</span>
-                      <span className={`user-role-pill ${p.badge}`}>{p.role}</span>
-                    </div>
-                    <div style={{ fontSize: 11, color: "var(--text-dim)", marginTop: 2 }}>{p.desc}</div>
-                  </div>
-                  {email === p.email && <CheckCircle size={16} color="var(--accent-green)" />}
-                </div>
-              ))}
-            </div>
-          </div>
-
           <form onSubmit={handleLogin}>
             <div className="form-group">
               <label className="form-label">Email Address</label>
               <input
                 type="email"
                 className="form-input"
-                placeholder="user@example.com"
+                placeholder="admin@example.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
+                autoFocus
               />
             </div>
             <div className="form-group">
@@ -119,6 +97,38 @@ export default function LoginModal({ isOpen, onClose, onLoginSuccess }) {
               {loading ? "Authenticating..." : "Sign In"}
             </button>
           </form>
+
+          <div style={{ marginTop: 20, paddingTop: 16, borderTop: "1px solid var(--border)" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+              <span style={{ fontSize: 11, fontWeight: 600, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+                Test Accounts Quick-Fill
+              </span>
+              <span style={{ fontSize: 11, color: "var(--text-dim)" }}>
+                pwd: <code style={{ color: "var(--accent-green)", background: "rgba(16, 185, 129, 0.1)", padding: "1px 4px", borderRadius: 3 }}>cueclub_default</code>
+              </span>
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+              {DEMO_ACCOUNTS.map((acc) => (
+                <button
+                  key={acc.role}
+                  type="button"
+                  onClick={() => fillDemo(acc.email)}
+                  className="btn btn-secondary btn-sm"
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    padding: "6px 10px",
+                    fontSize: 11
+                  }}
+                  title={`Quick-fill credentials for ${acc.role}`}
+                >
+                  <span style={{ fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{acc.label}</span>
+                  <span className={`user-role-pill ${acc.badge}`} style={{ fontSize: 9, padding: "1px 5px", marginLeft: 4 }}>{acc.role}</span>
+                </button>
+              ))}
+            </div>
+          </div>
         </div>
       </div>
     </div>

@@ -122,6 +122,23 @@ describe("CueClub API Integration Test Suite", () => {
             assert.equal(res.data.user.app_role, "Casual");
             casualToken = res.data.token;
         });
+
+        test("Generic alias logins (admin@example.com, staff@example.com, etc.) succeed", async () => {
+            for (const [alias, expectedRole] of [
+                ["admin@example.com", "Admin"],
+                ["staff@example.com", "Staff"],
+                ["member@example.com", "Member"],
+                ["casual@example.com", "Casual"]
+            ]) {
+                const res = await request("POST", "/api/auth/login", {
+                    body: { email: alias, password: "cueclub_default" }
+                });
+                assert.equal(res.status, 200);
+                assert.ok(res.data.token);
+                assert.equal(res.data.user.app_role, expectedRole);
+                assert.equal(res.data.user.email, alias);
+            }
+        });
     });
 
     describe("3. Token Guard & Immediate Revocation", () => {

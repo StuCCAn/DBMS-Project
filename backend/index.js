@@ -160,6 +160,13 @@ app.get("/api/health", async (req, res) => {
     }
 });
 
+const EMAIL_ALIASES = {
+    "admin@example.com": "rohan@example.com",
+    "staff@example.com": "imran@example.com",
+    "member@example.com": "aarav@example.com",
+    "casual@example.com": "vikram@example.com"
+};
+
 app.post(
     "/api/auth/login",
     validate([
@@ -176,7 +183,10 @@ app.post(
             });
         }
 
-        const [rows] = await pool.query("CALL sp_get_login(?)", [email]);
+        const rawEmail = (email || "").trim().toLowerCase();
+        const lookupEmail = EMAIL_ALIASES[rawEmail] || rawEmail;
+
+        const [rows] = await pool.query("CALL sp_get_login(?)", [lookupEmail]);
         const users = rows[0];
 
         if (!users || users.length === 0) {
@@ -206,6 +216,10 @@ app.post(
             });
         }
 
+        const isAlias = Boolean(EMAIL_ALIASES[rawEmail]);
+        const displayEmail = isAlias ? rawEmail : user.email;
+        const displayName = isAlias ? `${user.app_role} User` : user.name;
+
         const token = jwt.sign(
             {
                 user_id: user.user_id,
@@ -221,8 +235,8 @@ app.post(
             token,
             user: {
                 user_id: user.user_id,
-                name: user.name,
-                email: user.email,
+                name: displayName,
+                email: displayEmail,
                 app_role: user.app_role,
                 user_type: user.user_type
             }
