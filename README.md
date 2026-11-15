@@ -45,19 +45,73 @@ Cue clubs tend to run on paper registers and the manager's memory, so bookings o
 
 ## Progress
 
-| Component | Status |
-| --- | --- |
-| Requirements, ER/EER design, relational schema, normalization | Done (see report) |
-| Schema DDL, constraints, triggers | In progress |
-| Views, report queries, sample data (500+ records) | In progress |
-| REST API | Not started |
-| React frontend | Not started |
+| Component | Status | Verified In |
+| --- | --- | --- |
+| Requirements, ER/EER design, relational schema, normalization | Complete ✅ | [`docs/CueClub_MidSem_Report.pdf`](docs/CueClub_MidSem_Report.pdf) |
+| Schema DDL, constraints, triggers, procedures, views | Complete ✅ | `database/*.sql` (43 constraint tests) |
+| Least-Privilege API Role & REST Backend | Complete ✅ | `backend/` (24 automated tests in CI) |
+| Single-Page Application (SPA) Frontend | Complete ✅ | `frontend/` (React 19 + Vite) |
 
-## Repository layout
+## Repository Layout
 
 ```
-docs/        design report (PDF) and ER diagram images
+database/             MySQL 8.0 DDL schemas, triggers, procedures, views, seed, and tests
+backend/              Node.js Express REST API, JWT auth, and connection pooling
+frontend/             React 19 SPA dashboard, interactive bracket, and match scorer
+docs/                 Immutable mid-semester design report (PDF) and API contract
 ```
 
-`backend/` and `frontend/` will be added once implementation begins. Setup and run instructions will be added to this README with them.
+---
+
+## Setup and Execution Guide
+
+### 1. Database Initialization (MySQL 8.0)
+
+Execute the database scripts in order using a root-privileged MySQL client:
+
+```bash
+mysql -u root -p < database/schema.sql
+mysql -u root -p cueclub < database/triggers.sql
+mysql -u root -p cueclub < database/procedures.sql
+mysql -u root -p cueclub < database/views.sql
+mysql -u root -p cueclub < database/seed.sql
+mysql -u root -p cueclub < database/roles.sql
+```
+
+To run the automated constraint verification suite (43 tests):
+```bash
+mysql -u root -p cueclub < database/constraint_tests.sql
+```
+
+### 2. Backend API Service
+
+```bash
+cd backend
+cp .env.example .env
+npm install
+npm test       # Runs the automated API test suite (24 tests)
+npm start      # Binds REST API to http://localhost:3000
+```
+
+### 3. Frontend Application
+
+```bash
+cd frontend
+npm install
+npm run dev    # Launches development server on http://localhost:5173
+```
+
+---
+
+## Demo Accounts & Test Credentials
+
+All pre-seeded demo accounts use the standard password: **`cueclub_default`**.
+
+| Persona | Name | Role | Email | Password |
+|---|---|---|---|---|
+| **Admin** | Rohan Mehta | `Admin` | `rohan@example.com` | `cueclub_default` |
+| **Staff** | Imran Sheikh | `Staff` | `imran@example.com` | `cueclub_default` |
+| **Member** | Aarav Nair | `Member` | `aarav@example.com` | `cueclub_default` |
+| **Casual** | Vikram Singh | `Casual` | `vikram@example.com` | `cueclub_default` |
+
 

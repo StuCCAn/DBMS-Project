@@ -1,0 +1,223 @@
+import React, { useState, useEffect } from "react";
+import { getCoachingHistory, getPlayerWeaknesses, recordAssessment } from "../api";
+import { GraduationCap, Award, AlertTriangle, Plus, Check, AlertCircle } from "lucide-react";
+
+export default function CoachingView({ currentUser }) {
+  const canCoach = currentUser?.app_role === "Admin" || currentUser?.app_role === "Staff";
+  const isMember = currentUser?.app_role === "Member";
+
+  const [history, setHistory] = useState([]);
+  const [weaknesses, setWeaknesses] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [success, setSuccess] = useState(null);
+
+  // Assessment Form Modal
+  const [assessModal, setAssessModal] = useState(false);
+  const [playerId, setPlayerId] = useState("3");
+  const [focusArea, setFocusArea] = useState("Cue action & stance");
+  const [rating, setRating] = useState("7");
+  const [notes, setNotes] = useState("");
+
+  useEffect(() => {
+    loadCoachingData();
+  }, []);
+
+  async function loadCoachingData() {
+    setLoading(true);
+    setError(null);
+    try {
+      const pId = isMember ? currentUser.user_id : null;
+      const [hist, weak] = await Promise.all([
+        getCoachingHistory(pId),
+        getPlayerWeaknesses(pId)
+      ]);
+      setHistory(hist);
+      setWeaknesses(weak);
+    } catch (err) {
+      setError(err.message || "Failed to load coaching data");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleRecordAssessment(e) {
+    e.preventDefault();
+    setError(null);
+    try {
+      await recordAssessment({
+        playerId: Number(playerId),
+        coachId: currentUser?.user_id || 2,
+        focusArea,
+        rating: Number(rating),
+        notes
+      });
+      setSuccess("Coaching assessment recorded successfully!");
+      setAssessModal(false);
+      setNotes("");
+      loadCoachingData();
+    } catch (err) {
+      setError(err.message || "Failed to record assessment");
+    }
+  }
+
+  return (
+    <div>
+      <div className="page-header">
+        <div>
+          <h1 className="page-title">Coaching Academy & Player Progress</h1>
+          <p className="page-description">Skill diagnostics, technique evaluations, and aggregated weakness metrics for targeted training.</p>
+        </div>
+        {canCoach && (
+          <button className="btn btn-primary btn-sm" onClick={() => setAssessModal(true)}>
+            <Plus size={16} /> Record Assessment
+          </button>
+        )}
+      </div>
+
+      {error && (
+        <div className="alert alert-error">
+          <AlertCircle size={16} />
+          <span>{error}</span>
+        </div>
+      )}
+      {success && (
+        <div className="alert alert-success">
+          <Check size={16} />
+          <span>{success}</span>
+        </div>
+      )}
+
+      {/* Weakness Analysis Highlights */}
+      {weaknesses.length > 0 && (
+        <div className="card" style={{ borderLeft: "4px solid var(--accent-purple)" }}>
+          <h3 className="card-title" style={{ fontSize: 16 }}>
+            <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <AlertTriangle size={18} color="var(--accent-purple)" />
+              Priority Training Areas (Weakness Diagnostics)
+            </span>
+          </h3>
+          <div className="grid-3">
+            {weaknesses.map((w, idx) => (
+              <div key={idx} style={{ padding: 14, background: "var(--bg-secondary)", borderRadius: 8, border: "1px solid var(--border)" }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: "#fff" }}>{w.focus_area}</div>
+                <div style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 4 }}>
+                  Avg Rating: <strong style={{ color: Number(w.avg_rating) < 6 ? "#f87171" : "var(--accent-green)" }}>{Number(w.avg_rating).toFixed(1)}/10</strong> ({w.assessments_count} drills)
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Assessment History Table */}
+      <div className="card">
+        <h2 className="card-title">Skill Assessment Log</h2>
+        {history.length === 0 ? (
+          <div style={{ textAlign: "center", padding: "30px 0", color: "var(--text-dim)" }}>
+            No coaching assessments recorded yet.
+          </div>
+        ) : (
+          <div className="table-container">
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th>Player</th>
+                  <th>Coach</th>
+                  <th>Focus Area</th>
+                  <th>Rating</th>
+                  <th>Coach Remarks</th>
+                </tr>
+              </thead>
+              <tbody>
+                {history.map((h, idx) => (
+                  <tr key={idx}>
+                    <td>{new Date(h.assessment_date).toLocaleDateString()}</td>
+                    <td>
+                      <strong>{h.player_name}</strong>
+                    </td>
+                    <td>{h.coach_name || "Head Coach"}</td>
+                    <td>
+                      <span className="badge badge-ongoing">{h.focus_area}</span>
+                    </td>
+                    <td>
+                      <strong style={{ fontSize: 15, color: Number(h.rating) >= 7 ? "var(--accent-green)" : Number(h.rating) >= 5 ? "#fbbf24" : "#f87171" }}>
+                        {h.rating} / 10
+                      </strong>
+                    </td>
+                    <td>{h.notes || "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      {/* Assessment Modal */}
+      {assessModal && (
+        <div className="modal-overlay">
+          <div className="modal-dialog">
+            <div className="modal-header">
+              <h3 className="modal-title">Record Skill Assessment</h3>
+            </div>
+            <form onSubmit={handleRecordAssessment}>
+              <div className="modal-body">
+                <div className="form-group">
+                  <label className="form-label">Player User ID</label>
+                  <input
+                    type="number"
+                    className="form-input"
+                    value={playerId}
+                    onChange={(e) => setPlayerId(e.target.value)}
+                    required
+                  />
+                </div>
+                <div className="grid-2">
+                  <div className="form-group">
+                    <label className="form-label">Focus Area</label>
+                    <select className="form-select" value={focusArea} onChange={(e) => setFocusArea(e.target.value)}>
+                      <option value="Cue action & stance">Cue action & stance</option>
+                      <option value="Potting accuracy">Potting accuracy</option>
+                      <option value="Positional play & cue ball control">Positional play & cue ball control</option>
+                      <option value="Safety play & snookers">Safety play & snookers</option>
+                      <option value="Break building">Break building</option>
+                      <option value="Tactical shot selection">Tactical shot selection</option>
+                    </select>
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Skill Rating (1 - 10)</label>
+                    <input
+                      type="number"
+                      min="1"
+                      max="10"
+                      className="form-input"
+                      value={rating}
+                      onChange={(e) => setRating(e.target.value)}
+                      required
+                    />
+                  </div>
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Coach Notes / Technical Drills</label>
+                  <textarea
+                    rows="3"
+                    className="form-textarea"
+                    placeholder="Specific advice on cue delivery, follow-through, or prescribed practice drills..."
+                    value={notes}
+                    onChange={(e) => setNotes(e.target.value)}
+                  />
+                </div>
+              </div>
+              <div className="modal-footer">
+                <button type="button" className="btn btn-secondary" onClick={() => setAssessModal(false)}>Cancel</button>
+                <button type="submit" className="btn btn-primary">Save Assessment</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

@@ -5,3 +5,10 @@ backend/node_modules/
 backend/.env.*
 !backend/.env.example
 *.log
+
+# Frontend local & build files
+frontend/node_modules/
+frontend/dist/
+frontend/.env
+frontend/.env.*
+!frontend/.env.example

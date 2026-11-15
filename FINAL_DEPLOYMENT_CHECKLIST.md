@@ -153,15 +153,15 @@ Complete each phase in order. The next phase begins only after the previous phas
 
 ### Phase 6 — Ujjwal: frontend, integration, and documentation
 
-- [ ] Update `README.md` first with setup, execution order, environment variables, and demo accounts to unblock all team workflows.
-- [ ] Create `frontend/` React scaffolding and build screens against mock responses from `docs/API_CONTRACT.md` in parallel with Phase 5.
-- [ ] Implement login and role-aware navigation.
-- [ ] Implement manager, staff/scorer, member, team, and casual-player screens.
-- [ ] Implement booking, credit ledger, tournament/bracket, scorer, leaderboard, inventory, and coaching screens.
-- [ ] Integrate every screen with the verified backend API.
-- [ ] Add loading, empty, validation, and error states.
+- [x] Update `README.md` first with setup, execution order, environment variables, and demo accounts to unblock all team workflows.
+- [x] Create `frontend/` React scaffolding and build screens against mock responses from `docs/API_CONTRACT.md` in parallel with Phase 5.
+- [x] Implement login and role-aware navigation.
+- [x] Implement manager, staff/scorer, member, team, and casual-player screens.
+- [x] Implement booking, credit ledger, tournament/bracket, scorer, leaderboard, inventory, and coaching screens.
+- [x] Integrate every screen with the verified backend API.
+- [x] Add loading, empty, validation, and error states.
 - [x] Add the final schema mapping and approved D-01 explanation to end-semester documentation.
-- [ ] Keep the immutable mid-semester report unchanged.
+- [x] Keep the immutable mid-semester report unchanged.
 
 ### Phase 7 — All contributors: final validation and presentation
 
