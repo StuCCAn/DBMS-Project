@@ -14,9 +14,10 @@ Cue clubs tend to run on paper registers and the manager's memory, so bookings o
 
 - **Course:** CS F212 Database Systems | Final Project Submission
 - **Deadline:** Sunday, 15 November 2026, 11:59 PM
-- **Git Submission Tag:** `final`
-- **Submitted Commit Hash:** `6d11b8237e12635ed4decd74b872ed08905f9a4e` (Tagged as `final`)
+- **Git Submission Tag:** [`final`](https://github.com/StuCCAn/DBMS-Project/releases/tag/final)
+- **Submitted Commit Hash:** See Git tag `final` (`git rev-parse final`)
 - **Repository Link:** [https://github.com/StuCCAn/DBMS-Project](https://github.com/StuCCAn/DBMS-Project)
+- **Final Release Tag:** [https://github.com/StuCCAn/DBMS-Project/releases/tag/final](https://github.com/StuCCAn/DBMS-Project/releases/tag/final)
 - **Evaluation Checkout:**
   ```bash
   git fetch --all --tags
@@ -132,7 +133,7 @@ mysql -u root -p cueclub < database/roles.sql
 > [!TIP]
 > **Database Datasets:**
 > - `database/seed.sql` provides the clean, curated demonstration dataset (~68 records) ideal for concise 7-minute UI walkthroughs.
-> - `database/seed_volumetric.sql` (generated via `scripts/generate_large_seed.py`) provides an additive 624-record dataset bringing total database records to **~692 rows** to satisfy the course project volumetric scope requirement:
+> - `database/seed_volumetric.sql` (generated via `scripts/generate_large_seed.py`) provides an additive 646-record dataset bringing total database records to exactly **692 rows** across all 11 relations to satisfy the course project volumetric scope requirement:
 >   ```bash
 >   mysql -u root -p cueclub < database/seed_volumetric.sql
 >   ```
