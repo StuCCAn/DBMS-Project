@@ -137,6 +137,34 @@ describe("CueClub API Integration Test Suite", () => {
             assert.equal(res.status, 200);
             assert.equal(res.data.user.email, "rohan@example.com");
         });
+
+        test("Deactivating a user immediately invalidates their active JWT token (403)", async () => {
+            // 1. Log in as Sahil Verma (User 6)
+            const loginRes = await request("POST", "/api/auth/login", {
+                body: { email: "sahil@example.com", password: "cueclub_default" }
+            });
+            assert.equal(loginRes.status, 200);
+            const sahilToken = loginRes.data.token;
+
+            // 2. Token works initially
+            const preRes = await request("GET", "/api/auth/me", {
+                headers: { Authorization: `Bearer ${sahilToken}` }
+            });
+            assert.equal(preRes.status, 200);
+
+            // 3. Admin deactivates User 6
+            const deactRes = await request("PATCH", "/api/users/6/deactivate", {
+                headers: { Authorization: `Bearer ${adminToken}` }
+            });
+            assert.equal(deactRes.status, 200);
+
+            // 4. Existing token is immediately rejected with 403 on subsequent requests
+            const postRes = await request("GET", "/api/auth/me", {
+                headers: { Authorization: `Bearer ${sahilToken}` }
+            });
+            assert.equal(postRes.status, 403);
+            assert.match(postRes.data.error, /deactivated/i);
+        });
     });
 
     describe("4. Password Update Rules & Security", () => {
@@ -244,6 +272,15 @@ describe("CueClub API Integration Test Suite", () => {
             assert.match(res.data.error, /cannot change status|Invalid tournament status/i);
         });
 
+        test("Reject manual transition to Completed status (400)", async () => {
+            const res = await request("PATCH", "/api/tournaments/1/status", {
+                headers: { Authorization: `Bearer ${adminToken}` },
+                body: { status: "Completed" }
+            });
+            assert.equal(res.status, 400);
+            assert.match(res.data.error, /Completed status can only be set via match completion/i);
+        });
+
         test("Reject creating match with unregistered player (400)", async () => {
             const res = await request("POST", "/api/tournaments/2/matches", {
                 headers: { Authorization: `Bearer ${adminToken}` },
@@ -277,6 +314,73 @@ describe("CueClub API Integration Test Suite", () => {
                 // but never 500 (unhandled internal server error / deadlock).
                 assert.notEqual(r.status, 500, `Concurrent charge failed with 500: ${JSON.stringify(r.data)}`);
             }
+        });
+    });
+
+    describe("8. Request Validation & Negative Security Guardrails", () => {
+        test("Reject malformed ID parameter with 400", async () => {
+            const res = await request("PATCH", "/api/tables/abc/status", {
+                headers: { Authorization: `Bearer ${adminToken}` },
+                body: { status: "Available" }
+            });
+            assert.equal(res.status, 400);
+            assert.match(res.data.error, /Invalid table ID/i);
+        });
+
+        test("Reject invalid ENUM in table status with 400", async () => {
+            const res = await request("PATCH", "/api/tables/1/status", {
+                headers: { Authorization: `Bearer ${adminToken}` },
+                body: { status: "Broken" }
+            });
+            assert.equal(res.status, 400);
+            assert.match(res.data.error, /Invalid table status/i);
+        });
+
+        test("Reject non-positive payment amount with 400", async () => {
+            const res = await request("POST", "/api/ledger/payment", {
+                headers: { Authorization: `Bearer ${adminToken}` },
+                body: { userId: 3, amount: -50.00 }
+            });
+            assert.equal(res.status, 400);
+            assert.match(res.data.error, /amount must be a positive number/i);
+        });
+
+        test("Reject invalid ledger charge type with 400", async () => {
+            const res = await request("POST", "/api/ledger/charge", {
+                headers: { Authorization: `Bearer ${adminToken}` },
+                body: { userId: 3, type: "UnknownCharge", amount: 100 }
+            });
+            assert.equal(res.status, 400);
+            assert.match(res.data.error, /type must be Canteen charge or Fine/i);
+        });
+
+        test("Reject unauthenticated access with 401", async () => {
+            const res = await request("GET", "/api/tables");
+            assert.equal(res.status, 401);
+            assert.match(res.data.error, /Authentication required/i);
+        });
+
+        test("Reject Casual player accessing staff/admin inventory endpoint with 403", async () => {
+            const res = await request("GET", "/api/inventory", {
+                headers: { Authorization: `Bearer ${casualToken}` }
+            });
+            assert.equal(res.status, 403);
+            assert.match(res.data.error, /Insufficient permissions/i);
+        });
+
+        test("Reject Member creating tournament with 403", async () => {
+            const res = await request("POST", "/api/tournaments", {
+                headers: { Authorization: `Bearer ${memberToken}` },
+                body: {
+                    title: "Rogue Tournament",
+                    game: "Snooker",
+                    format: "Knockout",
+                    start: "2026-12-30",
+                    fee: 100
+                }
+            });
+            assert.equal(res.status, 403);
+            assert.match(res.data.error, /Insufficient permissions/i);
         });
     });
 });

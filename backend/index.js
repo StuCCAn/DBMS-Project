@@ -5,7 +5,7 @@ const express = require("express");
 const pool = require("./db");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
-const { body, validationResult } = require("express-validator");
+const { body, param, validationResult } = require("express-validator");
 
 if (!process.env.JWT_SECRET) {
     console.error("FATAL: JWT_SECRET is not defined in environment variables.");
@@ -16,6 +16,28 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 app.use(express.json());
+
+// CORS headers for frontend integration (restricted to Vite dev & preview origins)
+const allowedOrigins = [
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+    "http://localhost:4173",
+    "http://127.0.0.1:4173"
+];
+
+app.use((req, res, next) => {
+    const origin = req.headers.origin;
+    if (origin && allowedOrigins.includes(origin)) {
+        res.header("Access-Control-Allow-Origin", origin);
+        res.header("Access-Control-Allow-Credentials", "true");
+    }
+    res.header("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS");
+    res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept, Authorization");
+    if (req.method === "OPTIONS") {
+        return res.sendStatus(204);
+    }
+    next();
+});
 
 // ---------------------------------------------------------------------------
 // Helpers: Validation middleware, OUT runner with deadlock retry & Error mapper
@@ -31,7 +53,8 @@ function validate(validations) {
             return next();
         }
         return res.status(400).json({
-            error: errors.array()[0].msg
+            error: errors.array()[0].msg,
+            errors: errors.array()
         });
     };
 }
@@ -137,7 +160,13 @@ app.get("/api/health", async (req, res) => {
     }
 });
 
-app.post("/api/auth/login", async (req, res) => {
+app.post(
+    "/api/auth/login",
+    validate([
+        body("email").trim().notEmpty().withMessage("Email is required").isEmail().withMessage("Valid email is required"),
+        body("password").notEmpty().withMessage("Password is required")
+    ]),
+    async (req, res) => {
     try {
         const { email, password } = req.body;
 
@@ -253,7 +282,23 @@ app.get("/api/auth/me", authenticateToken, (req, res) => {
 // ---------------------------------------------------------------------------
 // User Registration & Lifecycle (Members, Casuals, Password, Deactivate)
 // ---------------------------------------------------------------------------
-app.post("/api/members", authenticateToken, requireRole("Admin", "Staff"), async (req, res) => {
+app.post(
+    "/api/members",
+    authenticateToken,
+    requireRole("Admin", "Staff"),
+    validate([
+        body("name").trim().notEmpty().withMessage("name is required"),
+        body("phone").trim().notEmpty().withMessage("phone is required"),
+        body("email").trim().notEmpty().withMessage("email is required").isEmail().withMessage("Valid email is required"),
+        body("membershipNo").trim().notEmpty().withMessage("membershipNo is required"),
+        body("plan").isIn(["Monthly", "Quarterly", "Annual"]).withMessage("plan must be Monthly, Quarterly, or Annual"),
+        body("startDate").trim().notEmpty().withMessage("startDate is required"),
+        body("endDate").trim().notEmpty().withMessage("endDate is required"),
+        body("discountPct").optional().isFloat({ min: 0, max: 100 }).withMessage("discountPct must be between 0 and 100"),
+        body("creditLimit").optional().isFloat({ min: 0 }).withMessage("creditLimit must be a non-negative number"),
+        body("password").optional({ checkFalsy: true }).isString().isLength({ min: 6 }).withMessage("Password must be at least 6 characters")
+    ]),
+    async (req, res) => {
     try {
         const {
             name,
@@ -319,7 +364,17 @@ app.post("/api/members", authenticateToken, requireRole("Admin", "Staff"), async
     }
 });
 
-app.post("/api/casuals", authenticateToken, requireRole("Admin", "Staff"), async (req, res) => {
+app.post(
+    "/api/casuals",
+    authenticateToken,
+    requireRole("Admin", "Staff"),
+    validate([
+        body("name").trim().notEmpty().withMessage("name is required"),
+        body("phone").trim().notEmpty().withMessage("phone is required"),
+        body("email").trim().notEmpty().withMessage("email is required").isEmail().withMessage("Valid email is required"),
+        body("password").optional({ checkFalsy: true }).isString().isLength({ min: 6 }).withMessage("Password must be at least 6 characters")
+    ]),
+    async (req, res) => {
     try {
         const { name, phone, email, password } = req.body;
 
@@ -363,7 +418,14 @@ app.post("/api/casuals", authenticateToken, requireRole("Admin", "Staff"), async
     }
 });
 
-app.put("/api/users/:id/password", authenticateToken, async (req, res) => {
+app.put(
+    "/api/users/:id/password",
+    authenticateToken,
+    validate([
+        param("id").isInt({ min: 1 }).withMessage("Invalid user ID"),
+        body("newPassword").isString().isLength({ min: 6 }).withMessage("Password must be at least 6 characters")
+    ]),
+    async (req, res) => {
     try {
         const targetUserId = Number(req.params.id);
         const { currentPassword, newPassword } = req.body;
@@ -443,8 +505,8 @@ async function handleDeactivateUser(req, res) {
     }
 }
 
-app.patch("/api/users/:id/deactivate", authenticateToken, requireRole("Admin"), handleDeactivateUser);
-app.post("/api/users/:id/deactivate", authenticateToken, requireRole("Admin"), handleDeactivateUser);
+app.patch("/api/users/:id/deactivate", authenticateToken, requireRole("Admin"), validate([param("id").isInt({ min: 1 }).withMessage("Invalid user ID")]), handleDeactivateUser);
+app.post("/api/users/:id/deactivate", authenticateToken, requireRole("Admin"), validate([param("id").isInt({ min: 1 }).withMessage("Invalid user ID")]), handleDeactivateUser);
 
 // ---------------------------------------------------------------------------
 // Tables & Reservations
@@ -458,7 +520,15 @@ app.get("/api/tables", authenticateToken, async (req, res) => {
     }
 });
 
-app.patch("/api/tables/:id/status", authenticateToken, requireRole("Admin", "Staff"), async (req, res) => {
+app.patch(
+    "/api/tables/:id/status",
+    authenticateToken,
+    requireRole("Admin", "Staff"),
+    validate([
+        param("id").isInt({ min: 1 }).withMessage("Invalid table ID"),
+        body("status").isIn(["Available", "Maintenance", "Retired"]).withMessage("Invalid table status: must be Available, Maintenance, or Retired")
+    ]),
+    async (req, res) => {
     try {
         const tableId = Number(req.params.id);
         const { status } = req.body;
@@ -523,7 +593,19 @@ app.get(
     }
 );
 
-app.post("/api/reservations", authenticateToken, async (req, res) => {
+app.post(
+    "/api/reservations",
+    authenticateToken,
+    validate([
+        body("tableId").isInt({ min: 1 }).withMessage("tableId must be a positive integer"),
+        body("start").trim().notEmpty().withMessage("start is required"),
+        body("end").trim().notEmpty().withMessage("end is required"),
+        body("mode").isIn(["Hourly", "PerFrame"]).withMessage("mode must be Hourly or PerFrame"),
+        body("frames").isInt({ min: 0 }).withMessage("frames must be a non-negative integer"),
+        body("payStatus").isIn(["Pending", "Paid", "OnCredit", "Cancelled"]).withMessage("payStatus must be Pending, Paid, OnCredit, or Cancelled"),
+        body("userId").optional().isInt({ min: 1 }).withMessage("userId must be a positive integer")
+    ]),
+    async (req, res) => {
     try {
         const { userId, tableId, start, end, mode, frames, payStatus } = req.body;
 
@@ -573,7 +655,13 @@ app.post("/api/reservations", authenticateToken, async (req, res) => {
     }
 });
 
-app.post("/api/reservations/:id/cancel", authenticateToken, async (req, res) => {
+app.post(
+    "/api/reservations/:id/cancel",
+    authenticateToken,
+    validate([
+        param("id").isInt({ min: 1 }).withMessage("Invalid reservation ID")
+    ]),
+    async (req, res) => {
     try {
         const reservationId = Number(req.params.id);
 
@@ -693,7 +781,16 @@ app.get("/api/ledger/entries", authenticateToken, async (req, res) => {
     }
 });
 
-app.post("/api/ledger/payment", authenticateToken, requireRole("Admin", "Staff"), async (req, res) => {
+app.post(
+    "/api/ledger/payment",
+    authenticateToken,
+    requireRole("Admin", "Staff"),
+    validate([
+        body("userId").isInt({ min: 1 }).withMessage("userId must be a positive integer"),
+        body("amount").isFloat({ gt: 0 }).withMessage("amount must be a positive number"),
+        body("note").optional().isString()
+    ]),
+    async (req, res) => {
     try {
         const { userId, amount, note } = req.body;
 
@@ -718,7 +815,17 @@ app.post("/api/ledger/payment", authenticateToken, requireRole("Admin", "Staff")
     }
 });
 
-app.post("/api/ledger/charge", authenticateToken, requireRole("Admin", "Staff"), async (req, res) => {
+app.post(
+    "/api/ledger/charge",
+    authenticateToken,
+    requireRole("Admin", "Staff"),
+    validate([
+        body("userId").isInt({ min: 1 }).withMessage("userId must be a positive integer"),
+        body("type").isIn(["Canteen charge", "Fine"]).withMessage("type must be Canteen charge or Fine"),
+        body("amount").isFloat({ gt: 0 }).withMessage("amount must be a positive number"),
+        body("note").optional().isString()
+    ]),
+    async (req, res) => {
     try {
         const { userId, type, amount, note } = req.body;
 
@@ -764,7 +871,18 @@ app.get("/api/tournaments", authenticateToken, async (req, res) => {
     }
 });
 
-app.post("/api/tournaments", authenticateToken, requireRole("Admin", "Staff"), async (req, res) => {
+app.post(
+    "/api/tournaments",
+    authenticateToken,
+    requireRole("Admin", "Staff"),
+    validate([
+        body("title").trim().notEmpty().withMessage("title is required"),
+        body("game").isIn(["Snooker", "Pool", "Billiards"]).withMessage("game must be Snooker, Pool, or Billiards"),
+        body("format").isIn(["Knockout", "League"]).withMessage("format must be Knockout or League"),
+        body("start").trim().notEmpty().withMessage("start is required"),
+        body("fee").isFloat({ min: 0 }).withMessage("fee must be a non-negative number")
+    ]),
+    async (req, res) => {
     try {
         const { title, game, format, start, fee } = req.body;
 
@@ -789,7 +907,15 @@ app.post("/api/tournaments", authenticateToken, requireRole("Admin", "Staff"), a
     }
 });
 
-app.patch("/api/tournaments/:id/status", authenticateToken, requireRole("Admin", "Staff"), async (req, res) => {
+app.patch(
+    "/api/tournaments/:id/status",
+    authenticateToken,
+    requireRole("Admin", "Staff"),
+    validate([
+        param("id").isInt({ min: 1 }).withMessage("Invalid tournament ID"),
+        body("status").isIn(["Draft", "Registration", "Ongoing", "Completed", "Cancelled"]).withMessage("Invalid tournament status: must be Draft, Registration, Ongoing, Completed, or Cancelled")
+    ]),
+    async (req, res) => {
     try {
         const tournamentId = Number(req.params.id);
         const { status } = req.body;
@@ -829,7 +955,16 @@ app.get("/api/tournaments/:id/registrations", authenticateToken, async (req, res
     }
 });
 
-app.post("/api/tournaments/:id/register", authenticateToken, async (req, res) => {
+app.post(
+    "/api/tournaments/:id/register",
+    authenticateToken,
+    validate([
+        param("id").isInt({ min: 1 }).withMessage("Invalid tournament ID"),
+        body("feePaid").isBoolean().withMessage("feePaid is required and must be boolean"),
+        body("userId").optional().isInt({ min: 1 }).withMessage("userId must be a positive integer"),
+        body("seed").optional({ nullable: true }).isInt({ min: 1 }).withMessage("seed must be a positive integer")
+    ]),
+    async (req, res) => {
     try {
         const tournamentId = Number(req.params.id);
         const { userId, seed, feePaid } = req.body;
@@ -899,7 +1034,19 @@ app.get("/api/tournaments/:id/bracket", authenticateToken, async (req, res) => {
     }
 });
 
-app.post("/api/tournaments/:id/matches", authenticateToken, requireRole("Admin", "Staff"), async (req, res) => {
+app.post(
+    "/api/tournaments/:id/matches",
+    authenticateToken,
+    requireRole("Admin", "Staff"),
+    validate([
+        param("id").isInt({ min: 1 }).withMessage("Invalid tournament ID"),
+        body("roundNumber").isInt({ min: 1 }).withMessage("roundNumber is required and must be an integer >= 1"),
+        body("player1Id").optional({ nullable: true }).isInt({ min: 1 }).withMessage("player1Id must be a positive integer"),
+        body("player2Id").optional({ nullable: true }).isInt({ min: 1 }).withMessage("player2Id must be a positive integer"),
+        body("nextMatchId").optional({ nullable: true }).isInt({ min: 1 }).withMessage("nextMatchId must be a positive integer"),
+        body("tableId").optional({ nullable: true }).isInt({ min: 1 }).withMessage("tableId must be a positive integer")
+    ]),
+    async (req, res) => {
     try {
         const tournamentId = Number(req.params.id);
         const {
@@ -942,7 +1089,17 @@ app.post("/api/tournaments/:id/matches", authenticateToken, requireRole("Admin",
     }
 });
 
-app.post("/api/matches/:id/complete", authenticateToken, requireRole("Admin", "Staff"), async (req, res) => {
+app.post(
+    "/api/matches/:id/complete",
+    authenticateToken,
+    requireRole("Admin", "Staff"),
+    validate([
+        param("id").isInt({ min: 1 }).withMessage("Invalid match ID"),
+        body("frames").isArray({ min: 1 }).withMessage("frames must be an array"),
+        body("winPoints").isInt({ min: 0 }).withMessage("winPoints must be an integer >= 0"),
+        body("lossPoints").isInt({ min: 0 }).withMessage("lossPoints must be an integer >= 0")
+    ]),
+    async (req, res) => {
     try {
         const matchId = Number(req.params.id);
         const { frames, winPoints, lossPoints } = req.body;
@@ -992,7 +1149,15 @@ app.get("/api/inventory/reorder-alerts", authenticateToken, requireRole("Admin",
     }
 });
 
-app.patch("/api/inventory/:id/stock", authenticateToken, requireRole("Admin", "Staff"), async (req, res) => {
+app.patch(
+    "/api/inventory/:id/stock",
+    authenticateToken,
+    requireRole("Admin", "Staff"),
+    validate([
+        param("id").isInt({ min: 1 }).withMessage("Invalid inventory item ID"),
+        body("delta").isNumeric().withMessage("numeric delta is required")
+    ]),
+    async (req, res) => {
     try {
         const itemId = Number(req.params.id);
         const { delta } = req.body;
@@ -1015,7 +1180,15 @@ app.patch("/api/inventory/:id/stock", authenticateToken, requireRole("Admin", "S
     }
 });
 
-app.patch("/api/inventory/:id/condition", authenticateToken, requireRole("Admin", "Staff"), async (req, res) => {
+app.patch(
+    "/api/inventory/:id/condition",
+    authenticateToken,
+    requireRole("Admin", "Staff"),
+    validate([
+        param("id").isInt({ min: 1 }).withMessage("Invalid inventory item ID"),
+        body("status").isIn(["Good", "Needs Service", "Damaged", "Retired"]).withMessage("status must be Good, Needs Service, Damaged, or Retired")
+    ]),
+    async (req, res) => {
     try {
         const itemId = Number(req.params.id);
         const { status } = req.body;
@@ -1041,7 +1214,23 @@ app.patch("/api/inventory/:id/condition", authenticateToken, requireRole("Admin"
 // ---------------------------------------------------------------------------
 // Coaching Assessments, History & Weaknesses
 // ---------------------------------------------------------------------------
-app.post("/api/coaching/assessments", authenticateToken, requireRole("Admin", "Staff"), async (req, res) => {
+app.post(
+    "/api/coaching/assessments",
+    authenticateToken,
+    requireRole("Admin", "Staff"),
+    validate([
+        body("playerId").isInt({ min: 1 }).withMessage("playerId must be a positive integer"),
+        body("rating").isInt({ min: 1, max: 10 }).withMessage("rating must be between 1 and 10"),
+        body().custom((val) => {
+            const skill = val.skillArea || val.skill;
+            const valid = ["Long potting", "Safety play", "Break building", "Positional play", "Cue ball control", "Pressure handling"];
+            if (!skill || !valid.includes(skill)) {
+                throw new Error("skillArea must match allowed assessment categories");
+            }
+            return true;
+        })
+    ]),
+    async (req, res) => {
     try {
         const { playerId, assessedBy, coachId, skillArea, skill, rating, notes } = req.body;
         const resolvedSkill = skillArea || skill;
