@@ -8,16 +8,11 @@ Cue clubs tend to run on paper registers and the manager's memory, so bookings o
 
 ## Final Submission Metadata
 
-> [!IMPORTANT]
-> Per **Section 1.B** of the project submission guidelines, this repository is tagged as **`final`** for course evaluation.
-> Only the state at tag `final` should be evaluated.
-
 - **Course:** CS F212 Database Systems | Final Project Submission
 - **Deadline:** Sunday, 15 November 2026, 11:59 PM
-- **Git Submission Tag:** [`final`](https://github.com/StuCCAn/DBMS-Project/releases/tag/final)
-- **Submitted Commit Hash:** See Git tag `final` (`git rev-parse final`)
+- **Git Submission Tag:** `final`
+- **Submitted Commit Hash:** `cb5e27b538ddc19d1f0881741df08cdda67c8ffc`
 - **Repository Link:** [https://github.com/StuCCAn/DBMS-Project](https://github.com/StuCCAn/DBMS-Project)
-- **Final Release Tag:** [https://github.com/StuCCAn/DBMS-Project/releases/tag/final](https://github.com/StuCCAn/DBMS-Project/releases/tag/final)
 - **Evaluation Checkout:**
   ```bash
   git fetch --all --tags
