@@ -29,9 +29,10 @@ BEGIN
     TRUNCATE TABLE Test_Results;
 
     -- Clean any existing temporary test fixtures before starting (ensures re-runnability)
+    UPDATE Matches SET next_match_id = NULL;
     DELETE FROM Match_Frames WHERE match_id IN (10, 11, 90, 91);
-    DELETE FROM Matches WHERE match_id IN (10, 11, 90, 91);
-    DELETE FROM Tournament_Registrations WHERE tournament_id IN (2, 90, 91);
+    DELETE FROM Matches WHERE match_id IN (10, 11, 90, 91) OR tournament_id IN (SELECT tournament_id FROM (SELECT tournament_id FROM Tournaments WHERE title LIKE 'Test %' OR tournament_id IN (2, 90, 91)) AS t_tmp);
+    DELETE FROM Tournament_Registrations WHERE tournament_id IN (2, 90, 91) OR tournament_id IN (SELECT tournament_id FROM (SELECT tournament_id FROM Tournaments WHERE title LIKE 'Test %' OR tournament_id IN (2, 90, 91)) AS t_tmp);
     DELETE FROM Tournaments WHERE title LIKE 'Test %' OR tournament_id IN (2, 90, 91);
     DELETE FROM Skill_Assessments WHERE notes LIKE 'Test %';
     DELETE FROM Credit_Ledger WHERE note LIKE 'Test %'
@@ -1021,6 +1022,7 @@ BEGIN
 
         -- Teardown test fixtures
         IF v_tid IS NOT NULL THEN
+            UPDATE Matches SET next_match_id = NULL WHERE tournament_id = v_tid;
             DELETE FROM Matches WHERE tournament_id = v_tid;
             DELETE FROM Tournament_Registrations WHERE tournament_id = v_tid;
             DELETE FROM Tournaments WHERE tournament_id = v_tid;
@@ -1066,9 +1068,10 @@ BEGIN
     -- ----------------------------------------------------------------
     -- Teardown all temporary test fixtures (re-runnability guarantee)
     -- ----------------------------------------------------------------
+    UPDATE Matches SET next_match_id = NULL;
     DELETE FROM Match_Frames WHERE match_id IN (10, 11, 90, 91);
-    DELETE FROM Matches WHERE match_id IN (10, 11, 90, 91);
-    DELETE FROM Tournament_Registrations WHERE tournament_id IN (2, 90, 91);
+    DELETE FROM Matches WHERE match_id IN (10, 11, 90, 91) OR tournament_id IN (SELECT tournament_id FROM (SELECT tournament_id FROM Tournaments WHERE title LIKE 'Test %' OR tournament_id IN (2, 90, 91)) AS t_tmp2);
+    DELETE FROM Tournament_Registrations WHERE tournament_id IN (2, 90, 91) OR tournament_id IN (SELECT tournament_id FROM (SELECT tournament_id FROM Tournaments WHERE title LIKE 'Test %' OR tournament_id IN (2, 90, 91)) AS t_tmp2);
     DELETE FROM Tournaments WHERE title LIKE 'Test %' OR tournament_id IN (2, 90, 91);
     DELETE FROM Skill_Assessments WHERE notes LIKE 'Test %';
     DELETE FROM Credit_Ledger WHERE note LIKE 'Test %'
