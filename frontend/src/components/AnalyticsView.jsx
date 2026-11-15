@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from "react";
-import { getTableUtilisation, getWinStreaks, getHeadToHead, getAdminDiagnostics, deactivateUser } from "../api";
+import React, { useState, useEffect, useCallback } from "react";
+import { getTableUtilisation, getWinStreaks, getHeadToHead, getAdminDiagnostics, deactivateUser, getToken } from "../api";
 import { BarChart3, Flame, Users2, ShieldAlert, AlertCircle, Check, UserMinus } from "lucide-react";
 
 export default function AnalyticsView({ currentUser }) {
@@ -16,11 +16,15 @@ export default function AnalyticsView({ currentUser }) {
   // Deactivation Input
   const [deactivateId, setDeactivateId] = useState("");
 
-  useEffect(() => {
-    loadAnalytics();
-  }, []);
-
-  async function loadAnalytics() {
+  const loadAnalytics = useCallback(async () => {
+    if (!getToken()) {
+      setUtilisation([]);
+      setStreaks([]);
+      setHeadToHead([]);
+      setDiagnostics([]);
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     setError(null);
     try {
@@ -42,7 +46,49 @@ export default function AnalyticsView({ currentUser }) {
     } finally {
       setLoading(false);
     }
-  }
+  }, [isAdmin]);
+
+  useEffect(() => {
+    let ignore = false;
+    async function init() {
+      if (!getToken()) {
+        setUtilisation([]);
+        setStreaks([]);
+        setHeadToHead([]);
+        setDiagnostics([]);
+        setLoading(false);
+        return;
+      }
+      try {
+        const [uList, sList, hList] = await Promise.all([
+          getTableUtilisation(),
+          getWinStreaks(),
+          getHeadToHead()
+        ]);
+        if (!ignore) {
+          setUtilisation(uList);
+          setStreaks(sList);
+          setHeadToHead(hList);
+          if (isAdmin) {
+            const diag = await getAdminDiagnostics().catch(() => []);
+            setDiagnostics(diag);
+          }
+        }
+      } catch (err) {
+        if (!ignore) {
+          setError(err.message || "Failed to load analytics");
+        }
+      } finally {
+        if (!ignore) {
+          setLoading(false);
+        }
+      }
+    }
+    init();
+    return () => {
+      ignore = true;
+    };
+  }, [isAdmin, currentUser]);
 
   async function handleDeactivate(e) {
     e.preventDefault();
@@ -53,6 +99,7 @@ export default function AnalyticsView({ currentUser }) {
     try {
       await deactivateUser(Number(deactivateId));
       setSuccess(`User #${deactivateId} deactivated successfully (Rule R9 active)!`);
+      setTimeout(() => setSuccess(null), 3000);
       setDeactivateId("");
       loadAnalytics();
     } catch (err) {
@@ -64,8 +111,8 @@ export default function AnalyticsView({ currentUser }) {
     <div>
       <div className="page-header">
         <div>
-          <h1 className="page-title">Executive Analytics & System Diagnostics</h1>
-          <p className="page-description">Revenue utilization, win streaks, head-to-head records, and EER specialization integrity audits.</p>
+          <h1 className="page-title">Executive Analytics & Audit Reports</h1>
+          <p className="page-description">Database analytical views, table utilisation metrics, player rivalries, and diagnostic integrity audits.</p>
         </div>
         <button className="btn btn-secondary btn-sm" onClick={loadAnalytics} disabled={loading}>
           Refresh
@@ -85,80 +132,80 @@ export default function AnalyticsView({ currentUser }) {
         </div>
       )}
 
-      {/* Admin EER Diagnostics Card */}
+      {/* Admin Quick Action: Rule R9 Soft-Deactivation */}
       {isAdmin && (
-        <div className="card" style={{ borderLeft: "4px solid var(--accent-gold)" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12 }}>
+        <div className="card" style={{ marginBottom: 24, padding: "16px 20px" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <div>
-              <h2 className="card-title" style={{ marginBottom: 4, display: "flex", alignItems: "center", gap: 8 }}>
-                <ShieldAlert size={18} color="var(--accent-gold)" />
-                Database Diagnostics: EER Specialization Audit (`v_specialization_anomalies`)
-              </h2>
-              <span style={{ fontSize: 13, color: "var(--text-muted)" }}>
-                Audits total/disjoint Level 1 specialization and overlapping/partial Level 2 subtype flags.
-              </span>
+              <h3 className="card-title" style={{ fontSize: 15, margin: 0 }}>
+                Rule R9 Compliance: Deactivate User
+              </h3>
+              <p style={{ fontSize: 12, color: "var(--text-dim)", margin: "4px 0 0" }}>
+                Revokes active status and auth tokens while strictly safeguarding historical match and ledger records.
+              </p>
             </div>
-          </div>
-
-          {diagnostics.length === 0 ? (
-            <div style={{ padding: "14px 18px", background: "rgba(16, 185, 129, 0.1)", borderRadius: 8, border: "1px solid rgba(16, 185, 129, 0.2)", color: "var(--accent-green)", fontSize: 13, fontWeight: 600 }}>
-              ✓ Clean Database Audit: 0 specialization anomalies found. All user subtype invariants hold!
-            </div>
-          ) : (
-            <div className="table-container">
-              <table className="data-table">
-                <thead>
-                  <tr>
-                    <th>User ID</th>
-                    <th>Name</th>
-                    <th>User Type</th>
-                    <th>Anomaly Code</th>
-                    <th>Description</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {diagnostics.map((d, i) => (
-                    <tr key={i}>
-                      <td>#{d.user_id}</td>
-                      <td>{d.name}</td>
-                      <td>{d.user_type}</td>
-                      <td><span className="badge badge-cancelled">{d.anomaly_type}</span></td>
-                      <td>{d.description}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-
-          {/* User Deactivation Form */}
-          <div style={{ marginTop: 20, paddingTop: 16, borderTop: "1px solid var(--border)" }}>
-            <h4 style={{ fontSize: 14, fontWeight: 600, color: "#fff", marginBottom: 8 }}>Deactivate User Account (Rule R9)</h4>
-            <form onSubmit={handleDeactivate} style={{ display: "flex", gap: 10, maxWidth: 400 }}>
+            <form onSubmit={handleDeactivate} style={{ display: "flex", gap: 10 }}>
               <input
                 type="number"
                 className="form-input"
-                placeholder="User ID (e.g. 5)"
+                style={{ width: 140 }}
+                placeholder="User ID"
                 value={deactivateId}
                 onChange={(e) => setDeactivateId(e.target.value)}
                 required
               />
-              <button type="submit" className="btn btn-danger btn-sm" style={{ whiteSpace: "nowrap" }}>
-                <UserMinus size={14} /> Deactivate User
+              <button type="submit" className="btn btn-danger btn-sm">
+                <UserMinus size={14} /> Deactivate
               </button>
             </form>
           </div>
         </div>
       )}
 
-      {/* Table Utilisation Analytics */}
-      <div className="card">
+      {/* Diagnostic Anomalies Alert for Admin */}
+      {isAdmin && diagnostics.length > 0 && (
+        <div className="card" style={{ borderLeft: "4px solid #f87171", marginBottom: 24 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+            <ShieldAlert size={18} color="#f87171" />
+            <h3 className="card-title" style={{ margin: 0, color: "#f87171" }}>
+              Diagnostic Specialization Integrity Alerts (v_specialization_anomalies)
+            </h3>
+          </div>
+          <div className="table-container">
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>User ID</th>
+                  <th>Name</th>
+                  <th>Registered Type</th>
+                  <th>Anomaly Detail</th>
+                </tr>
+              </thead>
+              <tbody>
+                {diagnostics.map((d, i) => (
+                  <tr key={i}>
+                    <td>#{d.user_id}</td>
+                    <td><strong>{d.name}</strong></td>
+                    <td>{d.user_type}</td>
+                    <td style={{ color: "#f87171" }}>{d.anomaly_type || d.notes || "Disjoint/Totality check flag"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* Table Utilisation Report */}
+      <div className="card" style={{ marginBottom: 24 }}>
         <h2 className="card-title" style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <BarChart3 size={18} color="var(--accent-green)" />
-          Table Utilisation & Revenue Breakdown (`v_table_utilisation`)
+          Table Utilisation & Revenue Performance (v_table_utilisation)
         </h2>
         {utilisation.length === 0 ? (
-          <div style={{ textAlign: "center", padding: "20px 0", color: "var(--text-dim)" }}>No utilization data recorded yet.</div>
+          <div style={{ textAlign: "center", padding: "20px 0", color: "var(--text-dim)" }}>
+            {loading ? "Loading table utilisation..." : "No table utilisation data recorded yet."}
+          </div>
         ) : (
           <div className="table-container">
             <table className="data-table">
@@ -167,20 +214,33 @@ export default function AnalyticsView({ currentUser }) {
                   <th>Table</th>
                   <th>Game Type</th>
                   <th>Total Reservations</th>
-                  <th>Booked Hours</th>
-                  <th>Utilisation Rate %</th>
-                  <th>Gross Revenue Generated</th>
+                  <th>Utilisation Rate</th>
+                  <th>Total Revenue</th>
                 </tr>
               </thead>
               <tbody>
                 {utilisation.map((u) => (
                   <tr key={u.table_id}>
                     <td><strong>{u.table_name || `Table ${u.table_number}`}</strong></td>
-                    <td><span className="badge badge-available">{u.game_type}</span></td>
-                    <td>{u.total_bookings}</td>
-                    <td>{Number(u.booked_hours || 0).toFixed(1)} hrs</td>
-                    <td><strong>{Number(u.utilisation_pct || 0).toFixed(1)}%</strong></td>
-                    <td><strong style={{ color: "var(--accent-green)" }}>₹{Number(u.gross_revenue || 0).toFixed(2)}</strong></td>
+                    <td>{u.game_type}</td>
+                    <td>{u.total_reservations || 0}</td>
+                    <td>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        <div style={{ flex: 1, background: "var(--bg-secondary)", borderRadius: 4, height: 8, overflow: "hidden", maxWidth: 120 }}>
+                          <div
+                            style={{
+                              width: `${Math.min(100, Number(u.utilisation_percentage || 0))}%`,
+                              background: "var(--accent-green)",
+                              height: "100%"
+                            }}
+                          />
+                        </div>
+                        <span style={{ fontSize: 12, fontWeight: 600 }}>{Number(u.utilisation_percentage || 0).toFixed(1)}%</span>
+                      </div>
+                    </td>
+                    <td style={{ fontWeight: 700, color: "var(--accent-green)" }}>
+                      ₹{Number(u.total_revenue || 0).toFixed(2)}
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -190,14 +250,16 @@ export default function AnalyticsView({ currentUser }) {
       </div>
 
       <div className="grid-2">
-        {/* Consecutive Win Streaks */}
+        {/* Win Streaks Report */}
         <div className="card">
           <h2 className="card-title" style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <Flame size={18} color="#f59e0b" />
-            Top Consecutive Win Streaks (`v_win_streaks`)
+            <Flame size={18} color="#fbbf24" />
+            Active Win Streaks (v_win_streaks)
           </h2>
           {streaks.length === 0 ? (
-            <div style={{ textAlign: "center", padding: "20px 0", color: "var(--text-dim)" }}>No active win streaks.</div>
+            <div style={{ textAlign: "center", padding: "20px 0", color: "var(--text-dim)" }}>
+              {loading ? "Loading streaks..." : "No active winning streaks recorded."}
+            </div>
           ) : (
             <div className="table-container">
               <table className="data-table">
@@ -205,19 +267,17 @@ export default function AnalyticsView({ currentUser }) {
                   <tr>
                     <th>Player</th>
                     <th>Current Streak</th>
-                    <th>Max Streak</th>
                   </tr>
                 </thead>
                 <tbody>
                   {streaks.map((s, idx) => (
                     <tr key={idx}>
-                      <td><strong>{s.player_name || s.name}</strong></td>
+                      <td><strong>{s.player_name}</strong></td>
                       <td>
-                        <span style={{ color: "#fbbf24", fontWeight: 700 }}>
-                          🔥 {s.current_streak || s.streak_length} Matches
+                        <span style={{ fontWeight: 700, color: "#fbbf24", display: "inline-flex", alignItems: "center", gap: 4 }}>
+                          <Flame size={14} /> {s.current_win_streak} consecutive wins
                         </span>
                       </td>
-                      <td>{s.longest_streak || s.streak_length}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -226,33 +286,33 @@ export default function AnalyticsView({ currentUser }) {
           )}
         </div>
 
-        {/* Head-to-Head Player Records */}
+        {/* Head to Head Rivalries Report */}
         <div className="card">
           <h2 className="card-title" style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <Users2 size={18} color="var(--accent-blue)" />
-            Head-to-Head Records (`v_head_to_head`)
+            <Users2 size={18} color="#60a5fa" />
+            Head-to-Head Rivalries (v_head_to_head)
           </h2>
           {headToHead.length === 0 ? (
-            <div style={{ textAlign: "center", padding: "20px 0", color: "var(--text-dim)" }}>No direct rivalries recorded yet.</div>
+            <div style={{ textAlign: "center", padding: "20px 0", color: "var(--text-dim)" }}>
+              {loading ? "Loading head-to-head records..." : "No head-to-head records recorded yet."}
+            </div>
           ) : (
             <div className="table-container">
               <table className="data-table">
                 <thead>
                   <tr>
-                    <th>Player A</th>
-                    <th>Player B</th>
-                    <th>Scoreline</th>
+                    <th>Matchup</th>
+                    <th>Record</th>
                   </tr>
                 </thead>
                 <tbody>
                   {headToHead.map((h, idx) => (
                     <tr key={idx}>
-                      <td><strong>{h.player1_name}</strong></td>
-                      <td><strong>{h.player2_name}</strong></td>
                       <td>
-                        <strong style={{ color: "var(--accent-green)" }}>
-                          {h.player1_wins} — {h.player2_wins}
-                        </strong>
+                        <strong>{h.player1_name}</strong> vs <strong>{h.player2_name}</strong>
+                      </td>
+                      <td style={{ fontWeight: 600 }}>
+                        {h.player1_wins} - {h.player2_wins}
                       </td>
                     </tr>
                   ))}

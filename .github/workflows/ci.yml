@@ -207,4 +207,15 @@ jobs:
           npm ci || npm install
           npm test
 
+      - name: Run Frontend test suite, lint, and production build
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd frontend
+          npm ci || npm install
+          npm run lint
+          npm test
+          npm run build
+
+
 

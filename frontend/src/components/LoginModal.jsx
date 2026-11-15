@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { login } from "../api";
-import { Shield, User, KeyRound, AlertCircle, CheckCircle } from "lucide-react";
+import { AlertCircle, CheckCircle } from "lucide-react";
 
 const DEMO_PERSONAS = [
   { role: "Admin", name: "Rohan Mehta", email: "rohan@example.com", badge: "role-admin", desc: "Full administrative control, diagnostics, user management" },
@@ -10,8 +10,8 @@ const DEMO_PERSONAS = [
 ];
 
 export default function LoginModal({ isOpen, onClose, onLoginSuccess }) {
-  const [email, setEmail] = useState("rohan@example.com");
-  const [password, setPassword] = useState("cueclub_default");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
@@ -34,7 +34,7 @@ export default function LoginModal({ isOpen, onClose, onLoginSuccess }) {
 
   function handlePersonaSelect(persona) {
     setEmail(persona.email);
-    setPassword("cueclub_default");
+    setPassword("");
     setError(null);
   }
 
@@ -92,6 +92,7 @@ export default function LoginModal({ isOpen, onClose, onLoginSuccess }) {
               <input
                 type="email"
                 className="form-input"
+                placeholder="user@example.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
@@ -102,6 +103,7 @@ export default function LoginModal({ isOpen, onClose, onLoginSuccess }) {
               <input
                 type="password"
                 className="form-input"
+                placeholder="Enter account password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required

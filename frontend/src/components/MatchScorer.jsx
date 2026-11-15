@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { completeMatch } from "../api";
-import { Swords, Plus, Trash2, CheckCircle, AlertCircle, X } from "lucide-react";
+import { Swords, Plus, Trash2, AlertCircle, X } from "lucide-react";
 
 export default function MatchScorer({ match, onClose, onCompleteSuccess }) {
   const [frames, setFrames] = useState([

@@ -1,6 +1,15 @@
-import React, { useState, useEffect } from "react";
-import { getCoachingHistory, getPlayerWeaknesses, recordAssessment } from "../api";
-import { GraduationCap, Award, AlertTriangle, Plus, Check, AlertCircle } from "lucide-react";
+import React, { useState, useEffect, useCallback } from "react";
+import { getCoachingHistory, getPlayerWeaknesses, recordAssessment, getToken } from "../api";
+import { AlertTriangle, Plus, Check, AlertCircle } from "lucide-react";
+
+const VALID_SKILL_AREAS = [
+  "Long potting",
+  "Safety play",
+  "Break building",
+  "Positional play",
+  "Cue ball control",
+  "Pressure handling"
+];
 
 export default function CoachingView({ currentUser }) {
   const canCoach = currentUser?.app_role === "Admin" || currentUser?.app_role === "Staff";
@@ -15,19 +24,21 @@ export default function CoachingView({ currentUser }) {
   // Assessment Form Modal
   const [assessModal, setAssessModal] = useState(false);
   const [playerId, setPlayerId] = useState("3");
-  const [focusArea, setFocusArea] = useState("Cue action & stance");
+  const [skillArea, setSkillArea] = useState(VALID_SKILL_AREAS[0]);
   const [rating, setRating] = useState("7");
   const [notes, setNotes] = useState("");
 
-  useEffect(() => {
-    loadCoachingData();
-  }, []);
-
-  async function loadCoachingData() {
+  const loadCoachingData = useCallback(async () => {
+    if (!getToken()) {
+      setHistory([]);
+      setWeaknesses([]);
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     setError(null);
     try {
-      const pId = isMember ? currentUser.user_id : null;
+      const pId = isMember ? currentUser?.user_id : null;
       const [hist, weak] = await Promise.all([
         getCoachingHistory(pId),
         getPlayerWeaknesses(pId)
@@ -39,20 +50,62 @@ export default function CoachingView({ currentUser }) {
     } finally {
       setLoading(false);
     }
-  }
+  }, [currentUser, isMember]);
+
+  useEffect(() => {
+    let ignore = false;
+    async function init() {
+      if (!getToken()) {
+        setHistory([]);
+        setWeaknesses([]);
+        setLoading(false);
+        return;
+      }
+      try {
+        const pId = isMember ? currentUser?.user_id : null;
+        const [hist, weak] = await Promise.all([
+          getCoachingHistory(pId),
+          getPlayerWeaknesses(pId)
+        ]);
+        if (!ignore) {
+          setHistory(hist);
+          setWeaknesses(weak);
+        }
+      } catch (err) {
+        if (!ignore) {
+          setError(err.message || "Failed to load coaching data");
+        }
+      } finally {
+        if (!ignore) {
+          setLoading(false);
+        }
+      }
+    }
+    init();
+    return () => {
+      ignore = true;
+    };
+  }, [currentUser, isMember]);
 
   async function handleRecordAssessment(e) {
     e.preventDefault();
     setError(null);
+
+    if (!currentUser?.user_id) {
+      setError("You must be logged in as coach or staff to record an assessment.");
+      return;
+    }
+
     try {
       await recordAssessment({
         playerId: Number(playerId),
-        coachId: currentUser?.user_id || 2,
-        focusArea,
+        assessedBy: Number(currentUser.user_id),
+        skillArea,
         rating: Number(rating),
-        notes
+        notes: notes.trim() || null
       });
       setSuccess("Coaching assessment recorded successfully!");
+      setTimeout(() => setSuccess(null), 3000);
       setAssessModal(false);
       setNotes("");
       loadCoachingData();
@@ -68,11 +121,16 @@ export default function CoachingView({ currentUser }) {
           <h1 className="page-title">Coaching Academy & Player Progress</h1>
           <p className="page-description">Skill diagnostics, technique evaluations, and aggregated weakness metrics for targeted training.</p>
         </div>
-        {canCoach && (
-          <button className="btn btn-primary btn-sm" onClick={() => setAssessModal(true)}>
-            <Plus size={16} /> Record Assessment
+        <div style={{ display: "flex", gap: 8 }}>
+          <button className="btn btn-secondary btn-sm" onClick={loadCoachingData} disabled={loading}>
+            Refresh
           </button>
-        )}
+          {canCoach && (
+            <button className="btn btn-primary btn-sm" onClick={() => setAssessModal(true)}>
+              <Plus size={16} /> Record Assessment
+            </button>
+          )}
+        </div>
       </div>
 
       {error && (
@@ -115,7 +173,7 @@ export default function CoachingView({ currentUser }) {
         <h2 className="card-title">Skill Assessment Log</h2>
         {history.length === 0 ? (
           <div style={{ textAlign: "center", padding: "30px 0", color: "var(--text-dim)" }}>
-            No coaching assessments recorded yet.
+            {loading ? "Loading assessments..." : "No coaching assessments recorded yet."}
           </div>
         ) : (
           <div className="table-container">
@@ -125,7 +183,7 @@ export default function CoachingView({ currentUser }) {
                   <th>Date</th>
                   <th>Player</th>
                   <th>Coach</th>
-                  <th>Focus Area</th>
+                  <th>Skill Area</th>
                   <th>Rating</th>
                   <th>Coach Remarks</th>
                 </tr>
@@ -135,11 +193,11 @@ export default function CoachingView({ currentUser }) {
                   <tr key={idx}>
                     <td>{new Date(h.assessment_date).toLocaleDateString()}</td>
                     <td>
-                      <strong>{h.player_name}</strong>
+                      <strong>{h.player_name || `Player #${h.player_id}`}</strong>
                     </td>
-                    <td>{h.coach_name || "Head Coach"}</td>
+                    <td>{h.coach_name || `Coach #${h.assessed_by}`}</td>
                     <td>
-                      <span className="badge badge-ongoing">{h.focus_area}</span>
+                      <span className="badge badge-ongoing">{h.focus_area || h.skill_area}</span>
                     </td>
                     <td>
                       <strong style={{ fontSize: 15, color: Number(h.rating) >= 7 ? "var(--accent-green)" : Number(h.rating) >= 5 ? "#fbbf24" : "#f87171" }}>
@@ -176,14 +234,11 @@ export default function CoachingView({ currentUser }) {
                 </div>
                 <div className="grid-2">
                   <div className="form-group">
-                    <label className="form-label">Focus Area</label>
-                    <select className="form-select" value={focusArea} onChange={(e) => setFocusArea(e.target.value)}>
-                      <option value="Cue action & stance">Cue action & stance</option>
-                      <option value="Potting accuracy">Potting accuracy</option>
-                      <option value="Positional play & cue ball control">Positional play & cue ball control</option>
-                      <option value="Safety play & snookers">Safety play & snookers</option>
-                      <option value="Break building">Break building</option>
-                      <option value="Tactical shot selection">Tactical shot selection</option>
+                    <label className="form-label">Skill Area</label>
+                    <select className="form-select" value={skillArea} onChange={(e) => setSkillArea(e.target.value)}>
+                      {VALID_SKILL_AREAS.map((area) => (
+                        <option key={area} value={area}>{area}</option>
+                      ))}
                     </select>
                   </div>
                   <div className="form-group">

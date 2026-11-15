@@ -1,6 +1,15 @@
-import React, { useState, useEffect } from "react";
-import { getTournaments, createTournament, setTournamentStatus, registerTournamentPlayer, getTournamentRegistrations, getBracketTree } from "../api";
-import { Trophy, Plus, Users, GitBranch, Play, AlertCircle, Check, Swords, Calendar } from "lucide-react";
+import React, { useState, useEffect, useCallback } from "react";
+import {
+  getTournaments,
+  createTournament,
+  setTournamentStatus,
+  registerTournamentPlayer,
+  getTournamentRegistrations,
+  getBracketTree,
+  createMatch,
+  getToken
+} from "../api";
+import { Plus, Users, GitBranch, AlertCircle, Check, Swords, CalendarPlus } from "lucide-react";
 
 export default function TournamentsView({ currentUser, onOpenScorer }) {
   const canManage = currentUser?.app_role === "Admin" || currentUser?.app_role === "Staff";
@@ -13,7 +22,7 @@ export default function TournamentsView({ currentUser, onOpenScorer }) {
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
 
-  // Modals
+  // Tournament Create Modal
   const [createModal, setCreateModal] = useState(false);
   const [title, setTitle] = useState("");
   const [gameType, setGameType] = useState("Snooker");
@@ -21,32 +30,22 @@ export default function TournamentsView({ currentUser, onOpenScorer }) {
   const [startDate, setStartDate] = useState("2026-12-01");
   const [entryFee, setEntryFee] = useState("200.00");
 
+  // Player Registration Modal
   const [regModal, setRegModal] = useState(false);
   const [regUserId, setRegUserId] = useState(currentUser?.user_id || 1);
   const [regSeed, setRegSeed] = useState("1");
   const [regFeePaid, setRegFeePaid] = useState(true);
 
-  useEffect(() => {
-    loadTournaments();
-  }, []);
+  // Match Creation Modal
+  const [matchModal, setMatchModal] = useState(false);
+  const [matchRound, setMatchRound] = useState("1");
+  const [matchP1, setMatchP1] = useState("");
+  const [matchP2, setMatchP2] = useState("");
+  const [matchNextId, setMatchNextId] = useState("");
+  const [matchTableId, setMatchTableId] = useState("");
+  const [matchScheduled, setMatchScheduled] = useState("");
 
-  async function loadTournaments() {
-    setLoading(true);
-    setError(null);
-    try {
-      const list = await getTournaments();
-      setTournaments(list);
-      if (list.length > 0 && !selectedTournament) {
-        selectTournament(list[0]);
-      }
-    } catch (err) {
-      setError(err.message || "Failed to load tournaments");
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  async function selectTournament(tourn) {
+  const selectTournament = useCallback(async (tourn) => {
     setSelectedTournament(tourn);
     setError(null);
     try {
@@ -59,7 +58,69 @@ export default function TournamentsView({ currentUser, onOpenScorer }) {
     } catch (err) {
       console.error(err);
     }
-  }
+  }, []);
+
+  const loadTournaments = useCallback(async () => {
+    if (!getToken()) {
+      setTournaments([]);
+      setSelectedTournament(null);
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
+    setError(null);
+    try {
+      const list = await getTournaments();
+      setTournaments(list);
+      if (list.length > 0) {
+        // Retain or select first
+        setSelectedTournament((prev) => {
+          if (prev) {
+            const found = list.find((t) => t.tournament_id === prev.tournament_id);
+            if (found) return found;
+          }
+          selectTournament(list[0]);
+          return list[0];
+        });
+      }
+    } catch (err) {
+      setError(err.message || "Failed to load tournaments");
+    } finally {
+      setLoading(false);
+    }
+  }, [selectTournament]);
+
+  useEffect(() => {
+    let ignore = false;
+    async function init() {
+      if (!getToken()) {
+        setTournaments([]);
+        setLoading(false);
+        return;
+      }
+      try {
+        const list = await getTournaments();
+        if (!ignore) {
+          setTournaments(list);
+          if (list.length > 0) {
+            selectTournament(list[0]);
+          }
+        }
+      } catch (err) {
+        if (!ignore) {
+          setError(err.message || "Failed to load tournaments");
+        }
+      } finally {
+        if (!ignore) {
+          setLoading(false);
+        }
+      }
+    }
+    init();
+    return () => {
+      ignore = true;
+    };
+  }, [currentUser, selectTournament]);
 
   async function handleCreateTournament(e) {
     e.preventDefault();
@@ -67,12 +128,13 @@ export default function TournamentsView({ currentUser, onOpenScorer }) {
     try {
       await createTournament({
         title,
-        gameType,
+        game: gameType,
         format,
-        startDate,
-        entryFee: Number(entryFee)
+        start: startDate,
+        fee: Number(entryFee)
       });
       setSuccess(`Tournament "${title}" created in Draft state!`);
+      setTimeout(() => setSuccess(null), 3000);
       setCreateModal(false);
       loadTournaments();
     } catch (err) {
@@ -85,6 +147,7 @@ export default function TournamentsView({ currentUser, onOpenScorer }) {
     try {
       await setTournamentStatus(tournId, newStatus);
       setSuccess(`Tournament status updated to ${newStatus}!`);
+      setTimeout(() => setSuccess(null), 3000);
       loadTournaments();
       if (selectedTournament?.tournament_id === tournId) {
         setSelectedTournament({ ...selectedTournament, status: newStatus });
@@ -98,12 +161,46 @@ export default function TournamentsView({ currentUser, onOpenScorer }) {
     e.preventDefault();
     setError(null);
     try {
-      await registerTournamentPlayer(selectedTournament.tournament_id, Number(regUserId), Number(regSeed), regFeePaid);
+      await registerTournamentPlayer(
+        selectedTournament.tournament_id,
+        Number(regUserId),
+        Number(regSeed),
+        regFeePaid
+      );
       setSuccess(`Player #${regUserId} registered for ${selectedTournament.title}!`);
+      setTimeout(() => setSuccess(null), 3000);
       setRegModal(false);
       selectTournament(selectedTournament);
     } catch (err) {
       setError(err.message || "Player registration failed");
+    }
+  }
+
+  async function handleCreateMatch(e) {
+    e.preventDefault();
+    setError(null);
+    try {
+      const formatSql = (isoStr) => (isoStr ? isoStr.replace("T", " ") + ":00" : null);
+      await createMatch(selectedTournament.tournament_id, {
+        roundNumber: Number(matchRound),
+        player1Id: matchP1 ? Number(matchP1) : null,
+        player2Id: matchP2 ? Number(matchP2) : null,
+        nextMatchId: matchNextId ? Number(matchNextId) : null,
+        tableId: matchTableId ? Number(matchTableId) : null,
+        scheduledTime: formatSql(matchScheduled)
+      });
+      setSuccess(`Match created for Round ${matchRound}!`);
+      setTimeout(() => setSuccess(null), 3000);
+      setMatchModal(false);
+      // Reset match form fields
+      setMatchP1("");
+      setMatchP2("");
+      setMatchNextId("");
+      setMatchTableId("");
+      setMatchScheduled("");
+      selectTournament(selectedTournament);
+    } catch (err) {
+      setError(err.message || "Failed to create match");
     }
   }
 
@@ -123,12 +220,17 @@ export default function TournamentsView({ currentUser, onOpenScorer }) {
           <h1 className="page-title">Tournaments & Bracket Trees</h1>
           <p className="page-description">Championship events, player seedings, and real-time hierarchical bracket progression.</p>
         </div>
-        {canManage && (
-          <button className="btn btn-primary btn-sm" onClick={() => setCreateModal(true)}>
-            <Plus size={16} />
-            Create Tournament
+        <div style={{ display: "flex", gap: 8 }}>
+          <button className="btn btn-secondary btn-sm" onClick={loadTournaments} disabled={loading}>
+            Refresh
           </button>
-        )}
+          {canManage && (
+            <button className="btn btn-primary btn-sm" onClick={() => setCreateModal(true)}>
+              <Plus size={16} />
+              Create Tournament
+            </button>
+          )}
+        </div>
       </div>
 
       {error && (
@@ -225,9 +327,15 @@ export default function TournamentsView({ currentUser, onOpenScorer }) {
 
             <div style={{ display: "flex", gap: 10 }}>
               {selectedTournament.status === "Registration" && (
-                <button className="btn btn-primary btn-sm" onClick={() => setRegModal(true)}>
+                <button className="btn btn-secondary btn-sm" onClick={() => setRegModal(true)}>
                   <Users size={14} />
                   Register Player
+                </button>
+              )}
+              {canManage && !["Completed", "Cancelled"].includes(selectedTournament.status) && (
+                <button className="btn btn-primary btn-sm" onClick={() => setMatchModal(true)}>
+                  <CalendarPlus size={14} />
+                  Create Match
                 </button>
               )}
             </div>
@@ -242,7 +350,7 @@ export default function TournamentsView({ currentUser, onOpenScorer }) {
 
             {roundKeys.length === 0 ? (
               <div style={{ padding: "40px 0", textAlign: "center", color: "var(--text-dim)", background: "var(--bg-secondary)", borderRadius: 8 }}>
-                No match nodes constructed yet for this tournament.
+                No match nodes constructed yet for this tournament. Use &quot;Create Match&quot; to build the bracket structure.
               </div>
             ) : (
               <div className="bracket-wrapper">
@@ -365,6 +473,95 @@ export default function TournamentsView({ currentUser, onOpenScorer }) {
               <div className="modal-footer">
                 <button type="button" className="btn btn-secondary" onClick={() => setRegModal(false)}>Cancel</button>
                 <button type="submit" className="btn btn-primary">Register Player</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Create Match Modal */}
+      {matchModal && selectedTournament && (
+        <div className="modal-overlay">
+          <div className="modal-dialog">
+            <div className="modal-header">
+              <h3 className="modal-title">Create Match — {selectedTournament.title}</h3>
+              <p className="page-description">Add a bracket match node and link feeder progression</p>
+            </div>
+            <form onSubmit={handleCreateMatch}>
+              <div className="modal-body">
+                <div className="grid-2">
+                  <div className="form-group">
+                    <label className="form-label">Round Number</label>
+                    <input
+                      type="number"
+                      min="1"
+                      className="form-input"
+                      value={matchRound}
+                      onChange={(e) => setMatchRound(e.target.value)}
+                      required
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Table ID (Optional)</label>
+                    <input
+                      type="number"
+                      min="1"
+                      className="form-input"
+                      placeholder="e.g. 1"
+                      value={matchTableId}
+                      onChange={(e) => setMatchTableId(e.target.value)}
+                    />
+                  </div>
+                </div>
+
+                <div className="grid-2">
+                  <div className="form-group">
+                    <label className="form-label">Player 1 User ID (Optional/TBD)</label>
+                    <input
+                      type="number"
+                      className="form-input"
+                      placeholder="e.g. 3"
+                      value={matchP1}
+                      onChange={(e) => setMatchP1(e.target.value)}
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Player 2 User ID (Optional/TBD)</label>
+                    <input
+                      type="number"
+                      className="form-input"
+                      placeholder="e.g. 4"
+                      value={matchP2}
+                      onChange={(e) => setMatchP2(e.target.value)}
+                    />
+                  </div>
+                </div>
+
+                <div className="grid-2">
+                  <div className="form-group">
+                    <label className="form-label">Next Round Match ID (Optional Feeder)</label>
+                    <input
+                      type="number"
+                      className="form-input"
+                      placeholder="e.g. 10"
+                      value={matchNextId}
+                      onChange={(e) => setMatchNextId(e.target.value)}
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Scheduled Time (Optional)</label>
+                    <input
+                      type="datetime-local"
+                      className="form-input"
+                      value={matchScheduled}
+                      onChange={(e) => setMatchScheduled(e.target.value)}
+                    />
+                  </div>
+                </div>
+              </div>
+              <div className="modal-footer">
+                <button type="button" className="btn btn-secondary" onClick={() => setMatchModal(false)}>Cancel</button>
+                <button type="submit" className="btn btn-primary">Create Match</button>
               </div>
             </form>
           </div>

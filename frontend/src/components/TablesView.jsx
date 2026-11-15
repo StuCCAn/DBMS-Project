@@ -1,6 +1,20 @@
-import React, { useState, useEffect } from "react";
-import { getTables, setTableStatus, getReservations, createReservation, cancelReservation } from "../api";
-import { PlayCircle, Clock, Calendar, Check, AlertCircle, Wrench, X, ShieldAlert } from "lucide-react";
+import React, { useState, useEffect, useCallback } from "react";
+import { getTables, setTableStatus, getReservations, createReservation, cancelReservation, getToken } from "../api";
+import { Calendar, Check, AlertCircle, Wrench, X } from "lucide-react";
+
+function getDefaultTimes() {
+  const now = new Date();
+  now.setMinutes(0, 0, 0);
+  const inTwoHours = new Date(now.getTime() + 2 * 60 * 60 * 1000);
+  const formatDt = (d) => {
+    const pad = (n) => String(n).padStart(2, "0");
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  };
+  return {
+    start: formatDt(now),
+    end: formatDt(inTwoHours)
+  };
+}
 
 export default function TablesView({ currentUser }) {
   const [tables, setTables] = useState([]);
@@ -13,31 +27,23 @@ export default function TablesView({ currentUser }) {
   const [bookingModalOpen, setBookingModalOpen] = useState(false);
   const [selectedTable, setSelectedTable] = useState(null);
   const [targetUserId, setTargetUserId] = useState(currentUser?.user_id || 1);
-  const [startTime, setStartTime] = useState("");
-  const [endTime, setEndTime] = useState("");
+  const defaultTimes = getDefaultTimes();
+  const [startTime, setStartTime] = useState(defaultTimes.start);
+  const [endTime, setEndTime] = useState(defaultTimes.end);
   const [billingMode, setBillingMode] = useState("Hourly");
   const [framesPlayed, setFramesPlayed] = useState(0);
-  const [paymentStatus, setPaymentStatus] = useState(currentUser?.app_role === "Member" ? "OnCredit" : "Cash");
+  const [paymentStatus, setPaymentStatus] = useState(currentUser?.app_role === "Member" ? "OnCredit" : "Paid");
   const [submittingBooking, setSubmittingBooking] = useState(false);
 
   const canManageTables = currentUser?.app_role === "Admin" || currentUser?.app_role === "Staff";
-  const canBook = currentUser?.app_role !== "Casual" || true; // Casuals can book with Cash/Pending
 
-  useEffect(() => {
-    loadData();
-    // Default start/end time
-    const now = new Date();
-    now.setMinutes(0, 0, 0);
-    const inTwoHours = new Date(now.getTime() + 2 * 60 * 60 * 1000);
-    const formatDt = (d) => {
-      const pad = (n) => String(n).padStart(2, "0");
-      return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-    };
-    setStartTime(formatDt(now));
-    setEndTime(formatDt(inTwoHours));
-  }, []);
-
-  async function loadData() {
+  const loadData = useCallback(async () => {
+    if (!getToken()) {
+      setTables([]);
+      setReservations([]);
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     setError(null);
     try {
@@ -49,7 +55,38 @@ export default function TablesView({ currentUser }) {
     } finally {
       setLoading(false);
     }
-  }
+  }, []);
+
+  useEffect(() => {
+    let ignore = false;
+    async function init() {
+      if (!getToken()) {
+        setTables([]);
+        setReservations([]);
+        setLoading(false);
+        return;
+      }
+      try {
+        const [tList, rList] = await Promise.all([getTables(), getReservations()]);
+        if (!ignore) {
+          setTables(tList);
+          setReservations(rList);
+        }
+      } catch (err) {
+        if (!ignore) {
+          setError(err.message || "Failed to load table data");
+        }
+      } finally {
+        if (!ignore) {
+          setLoading(false);
+        }
+      }
+    }
+    init();
+    return () => {
+      ignore = true;
+    };
+  }, [currentUser]);
 
   async function handleToggleStatus(table) {
     const nextStatus = table.status === "Available" ? "Maintenance" : "Available";
@@ -66,7 +103,10 @@ export default function TablesView({ currentUser }) {
   function openBookingModal(table) {
     setSelectedTable(table);
     setTargetUserId(currentUser?.user_id || 1);
-    setPaymentStatus(currentUser?.app_role === "Member" ? "OnCredit" : "Cash");
+    setPaymentStatus(currentUser?.app_role === "Member" ? "OnCredit" : "Paid");
+    const freshTimes = getDefaultTimes();
+    setStartTime(freshTimes.start);
+    setEndTime(freshTimes.end);
     setBookingModalOpen(true);
     setError(null);
   }
@@ -83,11 +123,11 @@ export default function TablesView({ currentUser }) {
       await createReservation({
         userId: Number(targetUserId),
         tableId: selectedTable.table_id,
-        startTime: formatSql(startTime),
-        endTime: formatSql(endTime),
-        billingMode,
-        framesPlayed: billingMode === "PerFrame" ? Number(framesPlayed) : 0,
-        paymentStatus
+        start: formatSql(startTime),
+        end: formatSql(endTime),
+        mode: billingMode,
+        frames: billingMode === "PerFrame" ? Number(framesPlayed) : 0,
+        payStatus: paymentStatus
       });
 
       setSuccess(`Booking confirmed for ${selectedTable.table_name || selectedTable.table_number}!`);
@@ -149,42 +189,40 @@ export default function TablesView({ currentUser }) {
                 <span style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", color: "var(--accent-green)" }}>
                   {t.game_type}
                 </span>
-                <h3 style={{ fontSize: 18, fontWeight: 700, color: "#fff", marginTop: 2 }}>{t.table_name || `Table ${t.table_number}`}</h3>
+                <h3 style={{ fontSize: 18, fontWeight: 700, color: "#fff", marginTop: 2 }}>
+                  {t.table_name || `Table ${t.table_number}`}
+                </h3>
               </div>
-              <span className={`badge badge-${(t.status || "available").toLowerCase()}`}>
+              <span className={`badge badge-${t.status.toLowerCase()}`}>
                 {t.status}
               </span>
             </div>
 
-            <div style={{ display: "flex", justifyContent: "space-between", margin: "16px 0", padding: "10px 14px", background: "var(--bg-secondary)", borderRadius: 8 }}>
-              <div>
-                <span style={{ fontSize: 11, color: "var(--text-dim)", display: "block" }}>Hourly Rate</span>
-                <span style={{ fontWeight: 700, color: "#fff" }}>₹{Number(t.hourly_rate).toFixed(2)}/hr</span>
-              </div>
-              <div>
-                <span style={{ fontSize: 11, color: "var(--text-dim)", display: "block" }}>Per Frame</span>
-                <span style={{ fontWeight: 700, color: "#fff" }}>₹{Number(t.per_frame_rate).toFixed(2)}</span>
-              </div>
+            <div style={{ fontSize: 13, color: "var(--text-muted)", marginBottom: 16 }}>
+              <div>Rate: <strong>₹{t.hourly_rate}</strong> / hr</div>
+              <div>Frame: <strong>₹{t.per_frame_rate}</strong> / frame</div>
             </div>
 
-            <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
-              <button
-                className="btn btn-primary btn-sm"
-                style={{ flex: 1 }}
-                disabled={t.status !== "Available"}
-                onClick={() => openBookingModal(t)}
-              >
-                <Calendar size={14} />
-                Book Table
-              </button>
+            <div style={{ display: "flex", gap: 8 }}>
+              {t.status === "Available" && (
+                <button
+                  className="btn btn-primary btn-sm"
+                  style={{ flex: 1 }}
+                  onClick={() => openBookingModal(t)}
+                >
+                  <Calendar size={14} />
+                  Book Table
+                </button>
+              )}
+
               {canManageTables && (
                 <button
                   className="btn btn-secondary btn-sm"
                   onClick={() => handleToggleStatus(t)}
-                  title="Toggle Maintenance"
+                  title={t.status === "Available" ? "Mark Maintenance" : "Mark Available"}
                 >
                   <Wrench size={14} />
-                  {t.status === "Available" ? "Maintenance" : "Activate"}
+                  {t.status === "Available" ? "Maint" : "Enable"}
                 </button>
               )}
             </div>
@@ -192,18 +230,18 @@ export default function TablesView({ currentUser }) {
         ))}
       </div>
 
-      {/* Reservations Table */}
+      {/* Active Reservations Ledger */}
       <div className="card">
-        <h2 className="card-title">
-          <span>Active & Upcoming Reservations</span>
-          <span style={{ fontSize: 13, color: "var(--text-muted)", fontWeight: "normal" }}>
-            {currentUser?.app_role === "Member" ? "Showing your bookings" : "Showing all club bookings"}
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+          <h2 className="card-title" style={{ margin: 0 }}>Recent Reservations & Status</h2>
+          <span style={{ fontSize: 12, color: "var(--text-dim)" }}>
+            Rule R1: Strictly single calendar day & no midnight crossing
           </span>
-        </h2>
+        </div>
 
         {reservations.length === 0 ? (
           <div style={{ textAlign: "center", padding: "30px 0", color: "var(--text-dim)" }}>
-            No reservations found.
+            No reservations found. Book a table above to start playing.
           </div>
         ) : (
           <div className="table-container">
@@ -211,13 +249,12 @@ export default function TablesView({ currentUser }) {
               <thead>
                 <tr>
                   <th>ID</th>
-                  <th>Player</th>
+                  <th>User / Member</th>
                   <th>Table</th>
                   <th>Start Time</th>
                   <th>End Time</th>
                   <th>Billing Mode</th>
                   <th>Amount</th>
-                  <th>Payment</th>
                   <th>Status</th>
                   <th>Action</th>
                 </tr>
@@ -228,30 +265,25 @@ export default function TablesView({ currentUser }) {
                     <td>#{r.reservation_id}</td>
                     <td>
                       <strong>{r.user_name || `User #${r.user_id}`}</strong>
-                      <span style={{ display: "block", fontSize: 11, color: "var(--text-dim)" }}>{r.user_type}</span>
                     </td>
                     <td>{r.table_name || `Table ${r.table_number}`}</td>
                     <td>{new Date(r.start_time).toLocaleString()}</td>
-                    <td>{new Date(r.end_time).toLocaleString()}</td>
-                    <td>{r.billing_mode}</td>
-                    <td><strong>₹{Number(r.total_amount).toFixed(2)}</strong></td>
+                    <td>{new Date(r.end_time).toLocaleTimeString()}</td>
+                    <td>{r.billing_mode} {r.billing_mode === "PerFrame" ? `(${r.frames_played}f)` : ""}</td>
+                    <td>₹{r.total_amount}</td>
                     <td>
-                      <span className={`badge ${r.payment_status === "Paid" ? "badge-ongoing" : r.payment_status === "OnCredit" ? "badge-registration" : "badge-draft"}`}>
+                      <span className={`badge badge-${r.payment_status.toLowerCase()}`}>
                         {r.payment_status}
                       </span>
                     </td>
                     <td>
-                      <span className={`badge ${r.status === "Confirmed" ? "badge-available" : r.status === "Cancelled" ? "badge-cancelled" : "badge-completed"}`}>
-                        {r.status || "Confirmed"}
-                      </span>
-                    </td>
-                    <td>
-                      {r.status !== "Cancelled" && (
+                      {r.payment_status !== "Cancelled" && (
                         <button
                           className="btn btn-danger btn-sm"
+                          style={{ padding: "4px 8px", fontSize: 11 }}
                           onClick={() => handleCancelBooking(r.reservation_id)}
                         >
-                          Cancel
+                          <X size={12} /> Cancel
                         </button>
                       )}
                     </td>
@@ -263,19 +295,18 @@ export default function TablesView({ currentUser }) {
         )}
       </div>
 
-      {/* Booking Modal */}
+      {/* Booking Form Modal */}
       {bookingModalOpen && selectedTable && (
         <div className="modal-overlay">
           <div className="modal-dialog">
             <div className="modal-header">
               <h3 className="modal-title">Book {selectedTable.table_name || `Table ${selectedTable.table_number}`}</h3>
-              <button onClick={() => setBookingModalOpen(false)} style={{ background: "none", border: "none", color: "var(--text-muted)", cursor: "pointer" }}>
-                <X size={18} />
-              </button>
+              <p className="page-description">{selectedTable.game_type} table reservation</p>
             </div>
+
             <form onSubmit={handleCreateBooking}>
               <div className="modal-body">
-                {canManageTables && (
+                {currentUser?.app_role !== "Member" && (
                   <div className="form-group">
                     <label className="form-label">Booking on Behalf of User ID</label>
                     <input
@@ -345,27 +376,28 @@ export default function TablesView({ currentUser }) {
                       value={paymentStatus}
                       onChange={(e) => setPaymentStatus(e.target.value)}
                     >
-                      <option value="Cash">Cash (Immediate Pay)</option>
+                      <option value="Paid">Paid (Cash / UPI / Card)</option>
                       <option value="Pending">Pending (Pay upon exit)</option>
                       <option value="OnCredit">OnCredit (Debit Member Credit Ledger)</option>
                     </select>
                   </div>
                 </div>
-
-                <div style={{ padding: 12, borderRadius: 8, background: "rgba(16, 185, 129, 0.08)", border: "1px solid rgba(16, 185, 129, 0.2)", marginTop: 10 }}>
-                  <div style={{ fontSize: 12, color: "var(--accent-green)", fontWeight: 600 }}>Discount & Credit Invariants</div>
-                  <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 2 }}>
-                    Club members receive active membership discount automatically. OnCredit bookings verify credit limit headroom in real-time.
-                  </div>
-                </div>
               </div>
 
               <div className="modal-footer">
-                <button type="button" className="btn btn-secondary" onClick={() => setBookingModalOpen(false)}>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={() => setBookingModalOpen(false)}
+                >
                   Cancel
                 </button>
-                <button type="submit" className="btn btn-primary" disabled={submittingBooking}>
-                  {submittingBooking ? "Confirming..." : "Confirm Booking"}
+                <button
+                  type="submit"
+                  className="btn btn-primary"
+                  disabled={submittingBooking}
+                >
+                  {submittingBooking ? "Booking..." : "Confirm Reservation"}
                 </button>
               </div>
             </form>

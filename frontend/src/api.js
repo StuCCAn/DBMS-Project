@@ -109,7 +109,16 @@ export async function getReservations() {
 }
 
 export async function createReservation(data) {
-  return apiRequest("/reservations", "POST", data);
+  const payload = {
+    userId: data.userId,
+    tableId: Number(data.tableId),
+    start: data.start || data.startTime,
+    end: data.end || data.endTime,
+    mode: data.mode || data.billingMode,
+    frames: data.frames !== undefined ? Number(data.frames) : (data.framesPlayed !== undefined ? Number(data.framesPlayed) : 0),
+    payStatus: data.payStatus || (data.paymentStatus === "Cash" ? "Paid" : data.paymentStatus)
+  };
+  return apiRequest("/reservations", "POST", payload);
 }
 
 export async function cancelReservation(reservationId) {
@@ -155,15 +164,27 @@ export async function getTournaments() {
 }
 
 export async function createTournament(data) {
-  return apiRequest("/tournaments", "POST", data);
+  const payload = {
+    title: data.title,
+    game: data.game || data.gameType,
+    format: data.format,
+    start: data.start || data.startDate,
+    fee: data.fee !== undefined ? Number(data.fee) : Number(data.entryFee)
+  };
+  return apiRequest("/tournaments", "POST", payload);
 }
 
 export async function setTournamentStatus(tournamentId, status) {
   return apiRequest(`/tournaments/${tournamentId}/status`, "PATCH", { status });
 }
 
-export async function registerTournamentPlayer(tournamentId, userId, seedNumber, feePaid = false) {
-  return apiRequest(`/tournaments/${tournamentId}/register`, "POST", { userId, seedNumber, feePaid });
+export async function registerTournamentPlayer(tournamentId, userId, seed, feePaid = false) {
+  const payload = {
+    userId: Number(userId),
+    seed: seed !== undefined && seed !== null && seed !== "" ? Number(seed) : null,
+    feePaid: Boolean(feePaid)
+  };
+  return apiRequest(`/tournaments/${tournamentId}/register`, "POST", payload);
 }
 
 export async function getTournamentRegistrations(tournamentId) {
@@ -172,7 +193,15 @@ export async function getTournamentRegistrations(tournamentId) {
 }
 
 export async function createMatch(tournamentId, data) {
-  return apiRequest(`/tournaments/${tournamentId}/matches`, "POST", data);
+  const payload = {
+    roundNumber: Number(data.roundNumber),
+    player1Id: data.player1Id ? Number(data.player1Id) : null,
+    player2Id: data.player2Id ? Number(data.player2Id) : null,
+    nextMatchId: data.nextMatchId ? Number(data.nextMatchId) : null,
+    tableId: data.tableId ? Number(data.tableId) : null,
+    scheduledTime: data.scheduledTime || null
+  };
+  return apiRequest(`/tournaments/${tournamentId}/matches`, "POST", payload);
 }
 
 export async function getBracketTree(tournamentId) {
@@ -242,7 +271,14 @@ export async function getReorderAlerts() {
 // Coaching Academy
 // ---------------------------------------------------------------------------
 export async function recordAssessment(data) {
-  return apiRequest("/coaching/assessments", "POST", data);
+  const payload = {
+    playerId: Number(data.playerId),
+    assessedBy: data.assessedBy !== undefined ? Number(data.assessedBy) : (data.coachId !== undefined ? Number(data.coachId) : undefined),
+    skillArea: data.skillArea || data.focusArea,
+    rating: Number(data.rating),
+    notes: data.notes || null
+  };
+  return apiRequest("/coaching/assessments", "POST", payload);
 }
 
 export async function getCoachingHistory(playerId = null) {

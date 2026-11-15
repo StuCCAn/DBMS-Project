@@ -1,17 +1,18 @@
-import React, { useState, useEffect } from "react";
-import { getLeaderboard } from "../api";
-import { Trophy, Medal, Award, TrendingUp, AlertCircle } from "lucide-react";
+import React, { useState, useEffect, useCallback } from "react";
+import { getLeaderboard, getToken } from "../api";
+import { Trophy, Medal, Award, AlertCircle } from "lucide-react";
 
 export default function LeaderboardView() {
   const [leaderboard, setLeaderboard] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  useEffect(() => {
-    loadLeaderboard();
-  }, []);
-
-  async function loadLeaderboard() {
+  const loadLeaderboard = useCallback(async () => {
+    if (!getToken()) {
+      setLeaderboard([]);
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     setError(null);
     try {
@@ -22,7 +23,36 @@ export default function LeaderboardView() {
     } finally {
       setLoading(false);
     }
-  }
+  }, []);
+
+  useEffect(() => {
+    let ignore = false;
+    async function init() {
+      if (!getToken()) {
+        setLeaderboard([]);
+        setLoading(false);
+        return;
+      }
+      try {
+        const data = await getLeaderboard();
+        if (!ignore) {
+          setLeaderboard(data);
+        }
+      } catch (err) {
+        if (!ignore) {
+          setError(err.message || "Failed to load leaderboard");
+        }
+      } finally {
+        if (!ignore) {
+          setLoading(false);
+        }
+      }
+    }
+    init();
+    return () => {
+      ignore = true;
+    };
+  }, []);
 
   return (
     <div>
@@ -90,64 +120,51 @@ export default function LeaderboardView() {
         </div>
       )}
 
-      {/* Complete Leaderboard Table */}
+      {/* Leaderboard Table */}
       <div className="card">
-        <h2 className="card-title">Full Club Rankings</h2>
+        <h2 className="card-title">Ranking Standings</h2>
         {leaderboard.length === 0 ? (
           <div style={{ textAlign: "center", padding: "30px 0", color: "var(--text-dim)" }}>
-            No leaderboard records found.
+            {loading ? "Loading leaderboard..." : "No player rankings available."}
           </div>
         ) : (
           <div className="table-container">
             <table className="data-table">
               <thead>
                 <tr>
-                  <th style={{ width: 60 }}>Rank</th>
+                  <th>Rank</th>
                   <th>Player Name</th>
-                  <th>Category</th>
-                  <th>Elo Ranking Points</th>
+                  <th>Player Type</th>
+                  <th>Ranking Points</th>
                   <th>Matches Played</th>
                   <th>Won</th>
                   <th>Lost</th>
-                  <th>Win Rate %</th>
+                  <th>Win Rate</th>
                 </tr>
               </thead>
               <tbody>
-                {leaderboard.map((row, idx) => {
-                  const rank = row.rank_position || idx + 1;
-                  const total = Number(row.matches_played || 0);
-                  const won = Number(row.matches_won || 0);
-                  const rate = total > 0 ? ((won / total) * 100).toFixed(1) : "0.0";
-
+                {leaderboard.map((p, idx) => {
+                  const played = Number(p.matches_played || 0);
+                  const won = Number(p.matches_won || 0);
+                  const rate = played > 0 ? ((won / played) * 100).toFixed(1) : "0.0";
                   return (
-                    <tr key={row.user_id || idx}>
+                    <tr key={p.user_id}>
+                      <td style={{ fontWeight: 700, color: idx < 3 ? "var(--accent-green)" : "inherit" }}>
+                        #{idx + 1}
+                      </td>
                       <td>
-                        <span style={{
-                          fontWeight: 800,
-                          fontSize: 15,
-                          color: rank === 1 ? "#fbbf24" : rank === 2 ? "#cbd5e1" : rank === 3 ? "#d97706" : "var(--text-muted)"
-                        }}>
-                          #{rank}
+                        <strong>{p.name}</strong>
+                      </td>
+                      <td>
+                        <span className={`user-role-pill role-${(p.user_type || "member").toLowerCase()}`}>
+                          {p.user_type}
                         </span>
                       </td>
-                      <td>
-                        <strong>{row.name}</strong>
-                        <span style={{ display: "block", fontSize: 11, color: "var(--text-dim)" }}>ID #{row.user_id}</span>
-                      </td>
-                      <td>
-                        <span className={`badge ${row.user_type === "Member" ? "badge-ongoing" : "badge-registration"}`}>
-                          {row.user_type}
-                        </span>
-                      </td>
-                      <td>
-                        <strong style={{ fontSize: 15, color: "var(--accent-green)" }}>
-                          {row.ranking_points}
-                        </strong>
-                      </td>
-                      <td>{total}</td>
-                      <td><span style={{ color: "var(--accent-green)", fontWeight: 600 }}>{won}</span></td>
-                      <td><span style={{ color: "#f87171" }}>{Number(row.matches_lost || 0)}</span></td>
-                      <td><strong>{rate}%</strong></td>
+                      <td style={{ fontWeight: 700, color: "#fff" }}>{p.ranking_points} pts</td>
+                      <td>{played}</td>
+                      <td style={{ color: "var(--accent-green)", fontWeight: 600 }}>{won}</td>
+                      <td style={{ color: "#f87171" }}>{p.matches_lost || 0}</td>
+                      <td>{rate}%</td>
                     </tr>
                   );
                 })}

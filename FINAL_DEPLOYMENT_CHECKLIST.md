@@ -157,8 +157,8 @@ Complete each phase in order. The next phase begins only after the previous phas
 - [x] Create `frontend/` React scaffolding and build screens against mock responses from `docs/API_CONTRACT.md` in parallel with Phase 5.
 - [x] Implement login and role-aware navigation.
 - [x] Implement manager, staff/scorer, member, team, and casual-player screens.
-- [x] Implement booking, credit ledger, tournament/bracket, scorer, leaderboard, inventory, and coaching screens.
-- [x] Integrate every screen with the verified backend API.
+- [ ] Implement booking, credit ledger, tournament/bracket, scorer, leaderboard, inventory, and coaching screens.
+- [ ] Integrate every screen with the verified backend API.
 - [x] Add loading, empty, validation, and error states.
 - [x] Add the final schema mapping and approved D-01 explanation to end-semester documentation.
 - [x] Keep the immutable mid-semester report unchanged.

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { getCurrentUser, setToken, setCurrentUser, getMe } from "./api";
+import { getCurrentUser, getToken, setToken, setCurrentUser, getMe } from "./api";
 import {
   Calendar,
   CreditCard,
@@ -33,8 +33,8 @@ export default function App() {
   const [scoringMatch, setScoringMatch] = useState(null);
 
   useEffect(() => {
-    // If user is stored, refresh profile
-    if (currentUser) {
+    // If token exists on mount, verify and refresh profile
+    if (getToken()) {
       getMe()
         .then((res) => {
           if (res?.user) {
