@@ -9,6 +9,7 @@ Additive data only (IDs 100+) preserving baseline database/seed.sql demo fixture
 
 import sys
 import os
+import datetime
 
 OUTPUT_FILE = os.path.join(os.path.dirname(__file__), "..", "database", "seed_volumetric.sql")
 
@@ -100,13 +101,13 @@ def generate():
         ("20:00:00", "21:00:00")
     ]
     
+    base_date = datetime.date(2026, 6, 1)
     res_id = 101
     day_offset = 0
     while res_id <= 350:
+        current_date = base_date + datetime.timedelta(days=day_offset)
+        date_str = current_date.isoformat()
         day_offset += 1
-        month = 7 + (day_offset // 30)
-        day = (day_offset % 28) + 1
-        date_str = f"2026-{month:02d}-{day:02d}"
         
         for tid in range(1, 7): # Tables 1 to 6
             slot_idx = (res_id + tid) % len(slots)
@@ -168,12 +169,16 @@ def generate():
     lines.append("-- -------------------------------------------------------------")
     tr_sql = ["INSERT INTO Tournament_Registrations (registration_id, tournament_id, user_id, seed_number, fee_paid) VALUES"]
     tr_rows = []
+    tournament_players = {}
     reg_id = 101
     for tid in [101, 102, 103, 104]:
+        reg_players = []
         for seed in range(1, 9):
             uid = 101 + ((seed - 1) + (tid * 3)) % 30 # Member users
+            reg_players.append(uid)
             tr_rows.append(f"({reg_id}, {tid}, {uid}, {seed}, TRUE)")
             reg_id += 1
+        tournament_players[tid] = reg_players
     tr_sql.append(",\n".join(tr_rows) + ";\n")
     lines.extend(tr_sql)
 
@@ -185,6 +190,12 @@ def generate():
     m_rows = []
     
     mid = 101
+    tour_dates = {
+        101: "2026-07-11",
+        102: "2026-08-16",
+        103: "2026-09-21",
+        104: "2026-10-26"
+    }
     for tid in [101, 102, 103, 104]:
         # 7 matches per 8-player bracket:
         # Final: mid + 6
@@ -198,20 +209,23 @@ def generate():
         qf3 = mid + 2
         qf4 = mid + 3
         
+        reg_players = tournament_players[tid]
+        m_date = tour_dates[tid]
+        
         # QF1
-        m_rows.append(f"({qf1}, {tid}, 1, 101, 102, 101, {sf1_id}, 1, '2026-08-01 10:00:00', 'Completed')")
+        m_rows.append(f"({qf1}, {tid}, 1, {reg_players[0]}, {reg_players[1]}, {reg_players[0]}, {sf1_id}, 1, '{m_date} 10:00:00', 'Completed')")
         # QF2
-        m_rows.append(f"({qf2}, {tid}, 1, 103, 104, 103, {sf1_id}, 2, '2026-08-01 10:00:00', 'Completed')")
+        m_rows.append(f"({qf2}, {tid}, 1, {reg_players[2]}, {reg_players[3]}, {reg_players[2]}, {sf1_id}, 2, '{m_date} 10:00:00', 'Completed')")
         # QF3
-        m_rows.append(f"({qf3}, {tid}, 1, 105, 106, 105, {sf2_id}, 1, '2026-08-01 12:00:00', 'Completed')")
+        m_rows.append(f"({qf3}, {tid}, 1, {reg_players[4]}, {reg_players[5]}, {reg_players[4]}, {sf2_id}, 1, '{m_date} 12:00:00', 'Completed')")
         # QF4
-        m_rows.append(f"({qf4}, {tid}, 1, 107, 108, 107, {sf2_id}, 2, '2026-08-01 12:00:00', 'Completed')")
+        m_rows.append(f"({qf4}, {tid}, 1, {reg_players[6]}, {reg_players[7]}, {reg_players[6]}, {sf2_id}, 2, '{m_date} 12:00:00', 'Completed')")
         # SF1
-        m_rows.append(f"({sf1_id}, {tid}, 2, 101, 103, 101, {final_id}, 1, '2026-08-01 15:00:00', 'Completed')")
+        m_rows.append(f"({sf1_id}, {tid}, 2, {reg_players[0]}, {reg_players[2]}, {reg_players[0]}, {final_id}, 1, '{m_date} 15:00:00', 'Completed')")
         # SF2
-        m_rows.append(f"({sf2_id}, {tid}, 2, 105, 107, 105, {final_id}, 2, '2026-08-01 15:00:00', 'Completed')")
+        m_rows.append(f"({sf2_id}, {tid}, 2, {reg_players[4]}, {reg_players[6]}, {reg_players[4]}, {final_id}, 2, '{m_date} 15:00:00', 'Completed')")
         # Final
-        m_rows.append(f"({final_id}, {tid}, 3, 101, 105, 101, NULL, 1, '2026-08-01 18:00:00', 'Completed')")
+        m_rows.append(f"({final_id}, {tid}, 3, {reg_players[0]}, {reg_players[4]}, {reg_players[0]}, NULL, 1, '{m_date} 18:00:00', 'Completed')")
         mid += 7
         
     m_sql.append(",\n".join(m_rows) + ";\n")
