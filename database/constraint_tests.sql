@@ -29,9 +29,10 @@ BEGIN
     TRUNCATE TABLE Test_Results;
 
     -- Clean any existing temporary test fixtures before starting (ensures re-runnability)
+    UPDATE Matches SET next_match_id = NULL;
     DELETE FROM Match_Frames WHERE match_id IN (10, 11, 90, 91);
-    DELETE FROM Matches WHERE match_id IN (10, 11, 90, 91);
-    DELETE FROM Tournament_Registrations WHERE tournament_id IN (2, 90, 91);
+    DELETE FROM Matches WHERE match_id IN (10, 11, 90, 91) OR tournament_id IN (SELECT tournament_id FROM (SELECT tournament_id FROM Tournaments WHERE title LIKE 'Test %' OR tournament_id IN (2, 90, 91)) AS t_tmp);
+    DELETE FROM Tournament_Registrations WHERE tournament_id IN (2, 90, 91) OR tournament_id IN (SELECT tournament_id FROM (SELECT tournament_id FROM Tournaments WHERE title LIKE 'Test %' OR tournament_id IN (2, 90, 91)) AS t_tmp);
     DELETE FROM Tournaments WHERE title LIKE 'Test %' OR tournament_id IN (2, 90, 91);
     DELETE FROM Skill_Assessments WHERE notes LIKE 'Test %';
     DELETE FROM Credit_Ledger WHERE note LIKE 'Test %'
@@ -40,7 +41,7 @@ BEGIN
     DELETE FROM Reservations WHERE start_time >= '2026-12-01' OR user_id IN (98, 99);
     DELETE FROM Club_Member WHERE user_id IN (98, 99);
     DELETE FROM Users WHERE user_id IN (98, 99);
-    UPDATE Users SET password_hash = '$2b$12$e8vBwO5F0fR.vP0NlK7F7.mK3rA6G1y0y7Xl8Q5f9gR0e3g5h8y1K' WHERE user_id = 1;
+    UPDATE Users SET password_hash = '$2b$10$NWNpCUlk.KlNnUF4XTPuRuMn1H/6b7vkH/oar0lKPFlk1CHyBT/G6' WHERE user_id = 1;
     UPDATE Game_Tables SET status = 'Available' WHERE table_id IN (1, 2, 4, 5);
     UPDATE Game_Tables SET status = 'Maintenance' WHERE table_id = 3;
     UPDATE Inventory_Items SET quantity = 6, condition_status = 'Good' WHERE item_id = 1;
@@ -920,7 +921,7 @@ BEGIN
         );
 
         -- Fixture restoration for User 1
-        UPDATE Users SET password_hash = '$2b$12$e8vBwO5F0fR.vP0NlK7F7.mK3rA6G1y0y7Xl8Q5f9gR0e3g5h8y1K' WHERE user_id = 1;
+        UPDATE Users SET password_hash = '$2b$10$NWNpCUlk.KlNnUF4XTPuRuMn1H/6b7vkH/oar0lKPFlk1CHyBT/G6' WHERE user_id = 1;
     END;
 
     -- ----------------------------------------------------------------
@@ -984,11 +985,93 @@ BEGIN
     END;
 
     -- ----------------------------------------------------------------
+    -- Test 42: sp_create_match: Invariants enforced (unregistered player rejected, valid match created)
+    -- ----------------------------------------------------------------
+    BEGIN
+        DECLARE v_tid INT DEFAULT NULL;
+        DECLARE v_m1 INT DEFAULT NULL;
+        DECLARE v_m2 INT DEFAULT NULL;
+        DECLARE v_err INT DEFAULT 0;
+        DECLARE CONTINUE HANDLER FOR SQLEXCEPTION SET v_err = v_err + 1;
+
+        -- Create tournament & open registration
+        CALL sp_create_tournament('Test Bracket Tournament', 'Snooker', 'Knockout', '2026-12-25', 100.00, v_tid);
+        CALL sp_set_tournament_status(v_tid, 'Registration');
+        CALL sp_register_tournament_player(v_tid, 1, 1, TRUE);
+        CALL sp_register_tournament_player(v_tid, 2, 2, TRUE);
+
+        -- Rejection 1: Player not registered in tournament (Player 3)
+        CALL sp_create_match(v_tid, 1, 1, 3, NULL, 1, '2026-12-25 10:00:00', v_m1);
+
+        -- Rejection 2: Self-pairing (Player 1 vs Player 1)
+        CALL sp_create_match(v_tid, 1, 1, 1, NULL, 1, '2026-12-25 10:00:00', v_m1);
+
+        -- Success: Valid Round 2 Final match
+        CALL sp_create_match(v_tid, 2, NULL, NULL, NULL, 1, '2026-12-25 16:00:00', v_m2);
+
+        -- Success: Valid Round 1 Semifinal feeding into Round 2
+        CALL sp_create_match(v_tid, 1, 1, 2, v_m2, 1, '2026-12-25 10:00:00', v_m1);
+
+        INSERT INTO Test_Results VALUES (
+            42,
+            'sp_create_match: Invariants enforced (unregistered player rejected, valid match created)',
+            'SUCCESS',
+            IF(v_err = 2 AND v_m1 IS NOT NULL AND v_m2 IS NOT NULL, 'SUCCESS', 'FAILED'),
+            (v_err = 2 AND v_m1 IS NOT NULL AND v_m2 IS NOT NULL)
+        );
+
+        -- Teardown test fixtures
+        IF v_tid IS NOT NULL THEN
+            UPDATE Matches SET next_match_id = NULL WHERE tournament_id = v_tid;
+            DELETE FROM Matches WHERE tournament_id = v_tid;
+            DELETE FROM Tournament_Registrations WHERE tournament_id = v_tid;
+            DELETE FROM Tournaments WHERE tournament_id = v_tid;
+        END IF;
+    END;
+
+    -- ----------------------------------------------------------------
+    -- Test 43: sp_set_tournament_status: Terminal states cannot be reverted (Completed -> Draft rejected)
+    -- ----------------------------------------------------------------
+    BEGIN
+        DECLARE v_tid INT DEFAULT NULL;
+        DECLARE v_err INT DEFAULT 0;
+        DECLARE v_final_status VARCHAR(20) DEFAULT NULL;
+        DECLARE CONTINUE HANDLER FOR SQLEXCEPTION SET v_err = v_err + 1;
+
+        -- Create tournament and transition to Completed
+        CALL sp_create_tournament('Test Terminal Status Tournament', 'Pool', 'Knockout', '2026-12-28', 50.00, v_tid);
+        CALL sp_set_tournament_status(v_tid, 'Ongoing');
+        CALL sp_set_tournament_status(v_tid, 'Completed');
+
+        -- Rejection 1: Completed -> Draft
+        CALL sp_set_tournament_status(v_tid, 'Draft');
+
+        -- Rejection 2: Completed -> Registration
+        CALL sp_set_tournament_status(v_tid, 'Registration');
+
+        SELECT status INTO v_final_status FROM Tournaments WHERE tournament_id = v_tid;
+
+        INSERT INTO Test_Results VALUES (
+            43,
+            'sp_set_tournament_status: Terminal states cannot be reverted (Completed -> Draft rejected)',
+            'SUCCESS',
+            IF(v_err = 2 AND v_final_status = 'Completed', 'SUCCESS', 'FAILED'),
+            (v_err = 2 AND v_final_status = 'Completed')
+        );
+
+        -- Teardown test fixture
+        IF v_tid IS NOT NULL THEN
+            DELETE FROM Tournaments WHERE tournament_id = v_tid;
+        END IF;
+    END;
+
+    -- ----------------------------------------------------------------
     -- Teardown all temporary test fixtures (re-runnability guarantee)
     -- ----------------------------------------------------------------
+    UPDATE Matches SET next_match_id = NULL;
     DELETE FROM Match_Frames WHERE match_id IN (10, 11, 90, 91);
-    DELETE FROM Matches WHERE match_id IN (10, 11, 90, 91);
-    DELETE FROM Tournament_Registrations WHERE tournament_id IN (2, 90, 91);
+    DELETE FROM Matches WHERE match_id IN (10, 11, 90, 91) OR tournament_id IN (SELECT tournament_id FROM (SELECT tournament_id FROM Tournaments WHERE title LIKE 'Test %' OR tournament_id IN (2, 90, 91)) AS t_tmp2);
+    DELETE FROM Tournament_Registrations WHERE tournament_id IN (2, 90, 91) OR tournament_id IN (SELECT tournament_id FROM (SELECT tournament_id FROM Tournaments WHERE title LIKE 'Test %' OR tournament_id IN (2, 90, 91)) AS t_tmp2);
     DELETE FROM Tournaments WHERE title LIKE 'Test %' OR tournament_id IN (2, 90, 91);
     DELETE FROM Skill_Assessments WHERE notes LIKE 'Test %';
     DELETE FROM Credit_Ledger WHERE note LIKE 'Test %'
@@ -997,7 +1080,7 @@ BEGIN
     DELETE FROM Reservations WHERE start_time >= '2026-12-01' OR user_id IN (98, 99);
     DELETE FROM Club_Member WHERE user_id IN (98, 99);
     DELETE FROM Users WHERE user_id IN (98, 99);
-    UPDATE Users SET password_hash = '$2b$12$e8vBwO5F0fR.vP0NlK7F7.mK3rA6G1y0y7Xl8Q5f9gR0e3g5h8y1K' WHERE user_id = 1;
+    UPDATE Users SET password_hash = '$2b$10$NWNpCUlk.KlNnUF4XTPuRuMn1H/6b7vkH/oar0lKPFlk1CHyBT/G6' WHERE user_id = 1;
     UPDATE Game_Tables SET status = 'Available' WHERE table_id IN (1, 2, 4, 5);
     UPDATE Game_Tables SET status = 'Maintenance' WHERE table_id = 3;
     UPDATE Inventory_Items SET quantity = 6, condition_status = 'Good' WHERE item_id = 1;

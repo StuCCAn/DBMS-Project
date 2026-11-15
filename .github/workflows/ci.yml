@@ -191,3 +191,20 @@ jobs:
           chmod +x database/tests/credit_race.sh
           bash database/tests/credit_race.sh
 
+      - name: Run Backend API automated test suite
+        if: steps.detect-database.outputs.available == 'true'
+        shell: bash
+        env:
+          DB_HOST: 127.0.0.1
+          DB_PORT: 3306
+          DB_USER: cueclub_api
+          DB_PASSWORD: cueclub_api_pw
+          DB_NAME: cueclub
+          JWT_SECRET: ci-pipeline-supersecret-jwt-key
+        run: |
+          set -euo pipefail
+          cd backend
+          npm ci || npm install
+          npm test
+
+

@@ -324,6 +324,7 @@ CREATE PROCEDURE sp_record_payment(
     OUT p_entry_id INT
 )
 BEGIN
+    DECLARE v_limit DECIMAL(10,2) DEFAULT NULL;
     DECLARE EXIT HANDLER FOR SQLEXCEPTION BEGIN ROLLBACK; RESIGNAL; END;
 
     IF p_amount IS NULL OR p_amount <= 0.00 THEN
@@ -331,7 +332,13 @@ BEGIN
     END IF;
 
     START TRANSACTION;
-        IF NOT EXISTS (SELECT 1 FROM Club_Member WHERE user_id = p_user) THEN
+        -- Concurrency lock order: lock Club_Member row early to avoid ledger trigger deadlock
+        SELECT credit_limit INTO v_limit
+          FROM Club_Member
+         WHERE user_id = p_user
+           FOR UPDATE;
+
+        IF v_limit IS NULL THEN
             SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Payments can only be recorded for registered club members';
         END IF;
 
@@ -353,6 +360,7 @@ CREATE PROCEDURE sp_record_charge(
     OUT p_entry_id INT
 )
 BEGIN
+    DECLARE v_limit DECIMAL(10,2) DEFAULT NULL;
     DECLARE EXIT HANDLER FOR SQLEXCEPTION BEGIN ROLLBACK; RESIGNAL; END;
 
     IF p_type NOT IN ('Canteen charge', 'Fine') THEN
@@ -364,7 +372,13 @@ BEGIN
     END IF;
 
     START TRANSACTION;
-        IF NOT EXISTS (SELECT 1 FROM Club_Member WHERE user_id = p_user) THEN
+        -- Concurrency lock order: lock Club_Member row early to avoid ledger trigger deadlock
+        SELECT credit_limit INTO v_limit
+          FROM Club_Member
+         WHERE user_id = p_user
+           FOR UPDATE;
+
+        IF v_limit IS NULL THEN
             SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Charges can only be recorded for registered club members';
         END IF;
 
@@ -633,15 +647,29 @@ CREATE PROCEDURE sp_set_tournament_status(
     IN p_status VARCHAR(20)
 )
 BEGIN
+    DECLARE v_curr_status VARCHAR(20) DEFAULT NULL;
     DECLARE EXIT HANDLER FOR SQLEXCEPTION BEGIN ROLLBACK; RESIGNAL; END;
 
+    IF p_status NOT IN ('Draft', 'Registration', 'Ongoing', 'Completed', 'Cancelled') THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Invalid tournament status: must be Draft, Registration, Ongoing, Completed, or Cancelled';
+    END IF;
+
     START TRANSACTION;
-        IF p_status NOT IN ('Draft', 'Registration', 'Ongoing', 'Completed', 'Cancelled') THEN
-            SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Invalid tournament status: must be Draft, Registration, Ongoing, Completed, or Cancelled';
+        SELECT status INTO v_curr_status
+          FROM Tournaments
+         WHERE tournament_id = p_tournament_id
+           FOR UPDATE;
+
+        IF v_curr_status IS NULL THEN
+            SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Tournament not found';
         END IF;
 
-        IF NOT EXISTS (SELECT 1 FROM Tournaments WHERE tournament_id = p_tournament_id) THEN
-            SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Tournament not found';
+        IF v_curr_status IN ('Completed', 'Cancelled') AND p_status <> v_curr_status THEN
+            SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Invalid tournament status transition: Completed or Cancelled tournaments cannot change status';
+        END IF;
+
+        IF v_curr_status = 'Ongoing' AND p_status IN ('Draft', 'Registration') THEN
+            SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Invalid tournament status transition: Ongoing tournament cannot revert to Draft or Registration';
         END IF;
 
         UPDATE Tournaments

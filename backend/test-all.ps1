@@ -1,8 +1,8 @@
 param(
-    [string]$AdminEmail = $env:CUECLUB_ADMIN_EMAIL,
-    [string]$AdminPassword = $env:CUECLUB_ADMIN_PASSWORD,
-    [string]$MemberEmail = $env:CUECLUB_MEMBER_EMAIL,
-    [string]$MemberPassword = $env:CUECLUB_MEMBER_PASSWORD
+    [string]$AdminEmail = $(if ($env:CUECLUB_ADMIN_EMAIL) { $env:CUECLUB_ADMIN_EMAIL } else { "rohan@example.com" }),
+    [string]$AdminPassword = $(if ($env:CUECLUB_ADMIN_PASSWORD) { $env:CUECLUB_ADMIN_PASSWORD } else { "cueclub_default" }),
+    [string]$MemberEmail = $(if ($env:CUECLUB_MEMBER_EMAIL) { $env:CUECLUB_MEMBER_EMAIL } else { "aarav@example.com" }),
+    [string]$MemberPassword = $(if ($env:CUECLUB_MEMBER_PASSWORD) { $env:CUECLUB_MEMBER_PASSWORD } else { "cueclub_default" })
 )
 
 $base = "http://localhost:3000"
