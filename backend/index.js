@@ -1379,7 +1379,12 @@ app.get("/api/coaching/weaknesses", authenticateToken, async (req, res) => {
 app.get("/api/reports/win-streaks", authenticateToken, requireRole("Admin", "Staff"), async (req, res) => {
     try {
         const [rows] = await pool.query("SELECT * FROM v_win_streaks");
-        res.json({ status: "success", data: rows });
+        const mapped = rows.map((r) => ({
+            ...r,
+            player_name: r.name,
+            current_win_streak: Number(r.streak_length || 0)
+        }));
+        res.json({ status: "success", data: mapped });
     } catch (error) {
         sendDbError(res, error, "Failed to fetch win streaks");
     }
@@ -1388,7 +1393,14 @@ app.get("/api/reports/win-streaks", authenticateToken, requireRole("Admin", "Sta
 app.get("/api/reports/head-to-head", authenticateToken, requireRole("Admin", "Staff"), async (req, res) => {
     try {
         const [rows] = await pool.query("SELECT * FROM v_head_to_head");
-        res.json({ status: "success", data: rows });
+        const mapped = rows.map((r) => ({
+            ...r,
+            player1_name: r.player,
+            player2_name: r.opponent,
+            player1_wins: Number(r.wins || 0),
+            player2_wins: Number(r.losses || 0)
+        }));
+        res.json({ status: "success", data: mapped });
     } catch (error) {
         sendDbError(res, error, "Failed to fetch head-to-head report");
     }
@@ -1397,7 +1409,14 @@ app.get("/api/reports/head-to-head", authenticateToken, requireRole("Admin", "St
 app.get("/api/reports/table-utilisation", authenticateToken, requireRole("Admin", "Staff"), async (req, res) => {
     try {
         const [rows] = await pool.query("SELECT * FROM v_table_utilisation");
-        res.json({ status: "success", data: rows });
+        const mapped = rows.map((r) => ({
+            ...r,
+            table_name: r.name,
+            total_reservations: Number(r.bookings || 0),
+            utilisation_percentage: r.peak_share_pct !== null && r.peak_share_pct !== undefined ? Number(r.peak_share_pct) : 0,
+            booked_hours: Number(r.booked_hours || 0)
+        }));
+        res.json({ status: "success", data: mapped });
     } catch (error) {
         sendDbError(res, error, "Failed to fetch table utilisation");
     }
@@ -1406,7 +1425,11 @@ app.get("/api/reports/table-utilisation", authenticateToken, requireRole("Admin"
 app.get("/api/admin/diagnostics", authenticateToken, requireRole("Admin"), async (req, res) => {
     try {
         const [rows] = await pool.query("SELECT * FROM v_specialization_anomalies");
-        res.json({ status: "success", data: rows });
+        const mapped = rows.map((r) => ({
+            ...r,
+            anomaly_type: r.anomaly_reason
+        }));
+        res.json({ status: "success", data: mapped });
     } catch (error) {
         sendDbError(res, error, "Failed to fetch diagnostics");
     }

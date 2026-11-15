@@ -187,7 +187,7 @@ export default function AnalyticsView({ currentUser }) {
                     <td>#{d.user_id}</td>
                     <td><strong>{d.name}</strong></td>
                     <td>{d.user_type}</td>
-                    <td style={{ color: "#f87171" }}>{d.anomaly_type || d.notes || "Disjoint/Totality check flag"}</td>
+                    <td style={{ color: "#f87171" }}>{d.anomaly_reason || d.anomaly_type || d.notes || "Disjoint/Totality check flag"}</td>
                   </tr>
                 ))}
               </tbody>
@@ -214,35 +214,47 @@ export default function AnalyticsView({ currentUser }) {
                   <th>Table</th>
                   <th>Game Type</th>
                   <th>Total Reservations</th>
-                  <th>Utilisation Rate</th>
-                  <th>Total Revenue</th>
+                  <th>Booked Hours</th>
+                  <th>Peak Share / Utilisation</th>
+                  <th>Busiest Rank</th>
                 </tr>
               </thead>
               <tbody>
-                {utilisation.map((u) => (
-                  <tr key={u.table_id}>
-                    <td><strong>{u.table_name || `Table ${u.table_number}`}</strong></td>
-                    <td>{u.game_type}</td>
-                    <td>{u.total_reservations || 0}</td>
-                    <td>
-                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                        <div style={{ flex: 1, background: "var(--bg-secondary)", borderRadius: 4, height: 8, overflow: "hidden", maxWidth: 120 }}>
-                          <div
-                            style={{
-                              width: `${Math.min(100, Number(u.utilisation_percentage || 0))}%`,
-                              background: "var(--accent-green)",
-                              height: "100%"
-                            }}
-                          />
+                {utilisation.map((u) => {
+                  const tableName = u.name || u.table_name || `Table #${u.table_id}`;
+                  const bookingsCount = u.bookings ?? u.total_reservations ?? 0;
+                  const bookedHours = u.booked_hours !== undefined ? Number(u.booked_hours).toFixed(1) : "0.0";
+                  const peakShare = u.peak_share_pct !== null && u.peak_share_pct !== undefined
+                    ? Number(u.peak_share_pct)
+                    : (u.utilisation_percentage !== undefined ? Number(u.utilisation_percentage) : 0);
+                  const rank = u.busiest_rank ? `#${u.busiest_rank}` : "—";
+
+                  return (
+                    <tr key={u.table_id}>
+                      <td><strong>{tableName}</strong></td>
+                      <td>{u.game_type}</td>
+                      <td>{bookingsCount}</td>
+                      <td>{bookedHours} hrs</td>
+                      <td>
+                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                          <div style={{ flex: 1, background: "var(--bg-secondary)", borderRadius: 4, height: 8, overflow: "hidden", maxWidth: 100 }}>
+                            <div
+                              style={{
+                                width: `${Math.min(100, Math.max(0, peakShare))}%`,
+                                background: "var(--accent-green)",
+                                height: "100%"
+                              }}
+                            />
+                          </div>
+                          <span style={{ fontSize: 12, fontWeight: 600 }}>{peakShare.toFixed(1)}%</span>
                         </div>
-                        <span style={{ fontSize: 12, fontWeight: 600 }}>{Number(u.utilisation_percentage || 0).toFixed(1)}%</span>
-                      </div>
-                    </td>
-                    <td style={{ fontWeight: 700, color: "var(--accent-green)" }}>
-                      ₹{Number(u.total_revenue || 0).toFixed(2)}
-                    </td>
-                  </tr>
-                ))}
+                      </td>
+                      <td>
+                        <span className="badge badge-ongoing" style={{ fontSize: 11 }}>{rank}</span>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -270,16 +282,20 @@ export default function AnalyticsView({ currentUser }) {
                   </tr>
                 </thead>
                 <tbody>
-                  {streaks.map((s, idx) => (
-                    <tr key={idx}>
-                      <td><strong>{s.player_name}</strong></td>
-                      <td>
-                        <span style={{ fontWeight: 700, color: "#fbbf24", display: "inline-flex", alignItems: "center", gap: 4 }}>
-                          <Flame size={14} /> {s.current_win_streak} consecutive wins
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
+                  {streaks.map((s, idx) => {
+                    const playerName = s.name || s.player_name || `Player #${s.player_id}`;
+                    const streakCount = s.streak_length ?? s.current_win_streak ?? 0;
+                    return (
+                      <tr key={idx}>
+                        <td><strong>{playerName}</strong></td>
+                        <td>
+                          <span style={{ fontWeight: 700, color: "#fbbf24", display: "inline-flex", alignItems: "center", gap: 4 }}>
+                            <Flame size={14} /> {streakCount} consecutive wins
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -306,16 +322,22 @@ export default function AnalyticsView({ currentUser }) {
                   </tr>
                 </thead>
                 <tbody>
-                  {headToHead.map((h, idx) => (
-                    <tr key={idx}>
-                      <td>
-                        <strong>{h.player1_name}</strong> vs <strong>{h.player2_name}</strong>
-                      </td>
-                      <td style={{ fontWeight: 600 }}>
-                        {h.player1_wins} - {h.player2_wins}
-                      </td>
-                    </tr>
-                  ))}
+                  {headToHead.map((h, idx) => {
+                    const p1 = h.player || h.player1_name || "Player 1";
+                    const p2 = h.opponent || h.player2_name || "Player 2";
+                    const w1 = h.wins ?? h.player1_wins ?? 0;
+                    const w2 = h.losses ?? h.player2_wins ?? 0;
+                    return (
+                      <tr key={idx}>
+                        <td>
+                          <strong>{p1}</strong> vs <strong>{p2}</strong>
+                        </td>
+                        <td style={{ fontWeight: 600 }}>
+                          {w1} - {w2}
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>

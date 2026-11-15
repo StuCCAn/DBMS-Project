@@ -53,7 +53,11 @@ export default function TablesView({ currentUser }) {
     setLoading(true);
     setError(null);
     try {
-      const [tList, rList] = await Promise.all([getTables(), getReservations()]);
+      const canView = currentUser?.app_role !== "Casual";
+      const [tList, rList] = await Promise.all([
+        getTables(),
+        canView ? getReservations().catch(() => []) : Promise.resolve([])
+      ]);
       setTables(tList);
       setReservations(rList);
     } catch (err) {
@@ -61,7 +65,7 @@ export default function TablesView({ currentUser }) {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [currentUser]);
 
   useEffect(() => {
     let ignore = false;
@@ -73,7 +77,11 @@ export default function TablesView({ currentUser }) {
         return;
       }
       try {
-        const [tList, rList] = await Promise.all([getTables(), getReservations()]);
+        const canView = currentUser?.app_role !== "Casual";
+        const [tList, rList] = await Promise.all([
+          getTables(),
+          canView ? getReservations().catch(() => []) : Promise.resolve([])
+        ]);
         if (!ignore) {
           setTables(tList);
           setReservations(rList);
