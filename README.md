@@ -15,7 +15,7 @@ Cue clubs tend to run on paper registers and the manager's memory, so bookings o
 - **Course:** CS F212 Database Systems | Final Project Submission
 - **Deadline:** Sunday, 15 November 2026, 11:59 PM
 - **Git Submission Tag:** `final`
-- **Submitted Commit Hash:** `6f0724800a640a8aef57fb8cf2eca2414d30851b`
+- **Submitted Commit Hash:** `48281185faa609822fbfa9e1ccfe22705246a5d8`
 - **Repository Link:** [https://github.com/StuCCAn/DBMS-Project](https://github.com/StuCCAn/DBMS-Project)
 - **Evaluation Checkout:**
   ```bash
@@ -128,6 +128,14 @@ mysql -u root -p cueclub < database/views.sql
 mysql -u root -p cueclub < database/seed.sql
 mysql -u root -p cueclub < database/roles.sql
 ```
+
+> [!TIP]
+> **Database Datasets:**
+> - `database/seed.sql` provides the clean, curated demonstration dataset (~68 records) ideal for concise 7-minute UI walkthroughs.
+> - `database/seed_volumetric.sql` (generated via `scripts/generate_large_seed.py`) provides an additive 624-record dataset bringing total database records to **~692 rows** to satisfy the course project volumetric scope requirement:
+>   ```bash
+>   mysql -u root -p cueclub < database/seed_volumetric.sql
+>   ```
 
 To run the automated constraint verification suite (43 tests):
 ```bash

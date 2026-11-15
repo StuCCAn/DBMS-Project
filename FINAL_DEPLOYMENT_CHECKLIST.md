@@ -423,7 +423,7 @@ Complete each phase in order. The next phase begins only after the previous phas
 
 These items represent secondary hardening, volumetric scaling, and enterprise testing. They are intentionally classified as non-blocking for Phase 5 (Backend) and Phase 6 (Frontend) implementation, and can be addressed after or in parallel with application workflows.
 
-- [ ] **500+ Synthetic Seed Generator:** Create a dedicated script (`scripts/generate_large_seed.py`) to generate `database/seed_large.sql` for volumetric testing without cluttering the clean demo seed.
+- [x] **500+ Synthetic Seed Generator:** Create a dedicated script (`scripts/generate_large_seed.py`) to generate `database/seed_volumetric.sql` for volumetric testing without cluttering the clean demo seed.
 - [ ] **Trigger Mutation Test Harness:** Script an automated job to drop triggers sequentially and verify that at least one named test in `constraint_tests.sql` fails.
 - [ ] **Versioned Database Migrations:** Add a versioned `migrations/` directory if incremental upgrades are requested, moving beyond baseline DDL scripts.
 - [ ] **Two-Session Table Collision Script:** Script a simulated two-session test for table booking collisions, accompanied by a written explanation of MySQL InnoDB locking strategies (credit-limit concurrency test verified in Phase 4).
