@@ -258,8 +258,10 @@ export default function LedgerView({ currentUser }) {
             <DollarSign size={24} />
           </div>
           <div>
-            <div className="stat-label">Total Lifetime Spend</div>
-            <div className="stat-value">₹{Number(balance?.total_spent || 0).toFixed(2)}</div>
+            <div className="stat-label">Available Credit (Headroom)</div>
+            <div className="stat-value" style={{ color: "var(--accent-green)" }}>
+              ₹{Number(balance?.credit_headroom !== undefined ? balance.credit_headroom : Math.max(0, Number(balance?.credit_limit || 0) - Number(balance?.outstanding_balance || 0))).toFixed(2)}
+            </div>
           </div>
         </div>
 
@@ -271,7 +273,7 @@ export default function LedgerView({ currentUser }) {
             <div className="stat-label">Credit Limit (Max Allowed)</div>
             <div className="stat-value">₹{Number(balance?.credit_limit || 0).toFixed(2)}</div>
             <div style={{ fontSize: 11, color: "var(--text-dim)", marginTop: 2 }}>
-              Available: ₹{Math.max(0, Number(balance?.credit_limit || 0) - Number(balance?.outstanding_balance || 0)).toFixed(2)}
+              Plan: {balance?.plan || "Standard"} ({Number(balance?.discount_pct || 0)}% discount)
             </div>
           </div>
         </div>

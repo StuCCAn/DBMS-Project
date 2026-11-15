@@ -619,7 +619,10 @@ CALL sp_set_tournament_status(
 |---|---|---|---|
 | `45000` | `sp_set_tournament_status` | `Invalid tournament status: must be Draft, Registration, Ongoing, Completed, or Cancelled` | `400 Bad Request` |
 | `45000` | `sp_set_tournament_status` | `Tournament not found` | `404 Not Found` |
+| `45000` | `sp_set_tournament_status` | `Invalid tournament status transition: Completed status can only be set via match completion` | `400 Bad Request` |
 | `45000` | `sp_set_tournament_status` | `Invalid tournament status transition: Completed or Cancelled tournaments cannot change status` | `400 Bad Request` |
+| `45000` | `sp_set_tournament_status` | `Invalid tournament status transition: Draft tournament can only transition to Registration or Cancelled` | `400 Bad Request` |
+| `45000` | `sp_set_tournament_status` | `Invalid tournament status transition: Registration tournament can only transition to Ongoing or Cancelled` | `400 Bad Request` |
 | `45000` | `sp_set_tournament_status` | `Invalid tournament status transition: Ongoing tournament cannot revert to Draft or Registration` | `400 Bad Request` |
 
 ---
