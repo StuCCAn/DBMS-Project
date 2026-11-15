@@ -49,7 +49,7 @@ Cue clubs tend to run on paper registers and the manager's memory, so bookings o
 | --- | --- | --- |
 | Requirements, ER/EER design, relational schema, normalization | Complete ✅ | [`docs/CueClub_MidSem_Report.pdf`](docs/CueClub_MidSem_Report.pdf) |
 | Schema DDL, constraints, triggers, procedures, views | Complete ✅ | `database/*.sql` (43 constraint tests) |
-| Least-Privilege API Role & REST Backend | Complete ✅ | `backend/` (24 automated tests in CI) |
+| Least-Privilege API Role & REST Backend | Complete ✅ | `backend/` (31 automated tests in CI) |
 | Single-Page Application (SPA) Frontend | Complete ✅ | `frontend/` (React 19 + Vite) |
 
 ## Repository Layout

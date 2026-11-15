@@ -207,8 +207,8 @@ Complete each phase in order. The next phase begins only after the previous phas
 - [x] Approve and document authentication and role fields under D-01 before backend release.
 - [x] Add a safe non-destructive initialization path; do not drop an existing production database.
 - [x] Remove or isolate the `DROP DATABASE` statement from production deployment.
-- [ ] Fix `ck_res_no_midnight` to allow reservations ending exactly at midnight (`00:00:00`), citing report Rule R1.
-- [ ] Fix `ck_res_total` to `total_amount >= 0` to permit complimentary (100% discount) bookings.
+- [x] Fix `ck_res_no_midnight` to allow reservations ending exactly at midnight (`00:00:00`), citing report Rule R1.
+- [x] Fix `ck_res_total` to `total_amount >= 0` to permit complimentary (100% discount) bookings.
 
 ### `database/triggers.sql`
 
@@ -216,15 +216,15 @@ Complete each phase in order. The next phase begins only after the previous phas
 - [x] Enforce the report's total specialization rule for every `Users` row via procedure encapsulation and diagnostic checks.
 - [x] Enforce the report's conditional subtype-attribute rules.
 - [x] Align booking, credit, registration, match, coaching, and inventory triggers with the final schema.
-- [ ] Add update-path triggers and lifecycle rules wherever the report requires invariants after updates (Phase 4).
+- [x] Add update-path triggers and lifecycle rules wherever the report requires invariants after updates (Phase 4).
 - [x] Verify every trigger message maps to a documented report rule.
 - [x] Enforce R1 by rejecting reservations whose start and end dates differ.
 - [x] Enforce membership expiry for discounts and credit bookings.
 - [x] Enforce deactivation rules before user operations.
-- [ ] Refactor `trg_reservation_bu` / `sp_validate_reservation` so updating `payment_status` (settling past dues or cancelling) does not fail due to current table maintenance or expired memberships.
-- [ ] Mitigate credit-limit race conditions by acquiring `FOR UPDATE` locks on `Club_Member` before balance verification in `trg_ledger_bi`.
-- [ ] Test direct SQL attempts to create a member without `Club_Member` and to remove `Club_Member` while retaining `user_type = 'Member'`.
-- [ ] Revalidate tournament status and active-user status on every relevant registration update.
+- [x] Refactor `trg_reservation_bu` / `sp_validate_reservation` so updating `payment_status` (settling past dues or cancelling) does not fail due to current table maintenance or expired memberships.
+- [x] Mitigate credit-limit race conditions by acquiring `FOR UPDATE` locks on `Club_Member` before balance verification in `trg_ledger_bi`.
+- [x] Test direct SQL attempts to create a member without `Club_Member` and to remove `Club_Member` while retaining `user_type = 'Member'`.
+- [x] Revalidate tournament status and active-user status on every relevant registration update.
 
 ### `database/procedures.sql`
 
@@ -234,11 +234,11 @@ Complete each phase in order. The next phase begins only after the previous phas
 - [x] Allow `OnCredit` only for active members.
 - [x] Update match completion to maintain the report-defined `Users.ranking_points`.
 - [x] Keep frame insertion, winner selection, bracket advancement, ranking updates, and tournament closure atomic.
-- [ ] Add explicit validation against NULL ranking-point inputs and cancelled matches (JSON format and basic bounds currently handled).
-- [ ] Implement `sp_cancel_booking(p_reservation_id)` to transition status to 'Cancelled' and post a compensating reversal entry in `Credit_Ledger` capped at outstanding balance (Deviation D-02).
-- [ ] Harden `sp_complete_match` to reject already-cancelled matches (`status NOT IN ('Scheduled', 'InProgress')`) and reject NULL ranking increments upfront.
-- [ ] Mitigate credit-limit race conditions in `sp_book_table` by taking `SELECT ... FOR UPDATE` on `Club_Member`.
-- [ ] Replace `match_id` ordering as the bracket-slot selector with an explicit, deterministic feeder-slot rule.
+- [x] Add explicit validation against NULL ranking-point inputs and cancelled matches (JSON format and basic bounds currently handled).
+- [x] Implement `sp_cancel_booking(p_reservation_id)` to transition status to 'Cancelled' and post a compensating reversal entry in `Credit_Ledger` capped at outstanding balance (Deviation D-02).
+- [x] Harden `sp_complete_match` to reject already-cancelled matches (`status NOT IN ('Scheduled', 'InProgress')`) and reject NULL ranking increments upfront.
+- [x] Mitigate credit-limit race conditions in `sp_book_table` by taking `SELECT ... FOR UPDATE` on `Club_Member`.
+- [x] Replace `match_id` ordering as the bracket-slot selector with an explicit, deterministic feeder-slot rule.
 
 ### `database/views.sql`
 
@@ -246,8 +246,8 @@ Complete each phase in order. The next phase begins only after the previous phas
 - [x] Replace `Player_Rankings` dependencies if the report-aligned schema stores ranking points in `Users`.
 - [x] Verify member balance, leaderboard, win streak, head-to-head, bracket, utilisation, reorder, and weakness reports.
 - [x] Document any view that intentionally uses an implementation-only helper relation.
-- [ ] Fix `v_leaderboard` by removing `COALESCE(cm.preferred_game, 'Snooker')` so Casual players do not default to 'Snooker'.
-- [ ] Add diagnostic specialization view `v_specialization_anomalies` to identify orphan users or casual players with membership records.
+- [x] Fix `v_leaderboard` by removing `COALESCE(cm.preferred_game, 'Snooker')` so Casual players do not default to 'Snooker'.
+- [x] Add diagnostic specialization view `v_specialization_anomalies` to identify orphan users or casual players with membership records.
 
 ### `database/seed.sql`
 
@@ -264,7 +264,7 @@ Complete each phase in order. The next phase begins only after the previous phas
 - [x] Demonstrate report-defined ranking storage and output.
 - [x] Demonstrate valid and invalid specialization states.
 - [x] Demonstrate booking, credit, tournament, bracket, inventory, and coaching workflows.
-- [ ] Make the demo output suitable for screenshots and presentation evidence.
+- [x] Make the demo output suitable for screenshots and presentation evidence.
 
 ### `database/constraint_tests.sql`
 
@@ -274,10 +274,10 @@ Complete each phase in order. The next phase begins only after the previous phas
 - [x] Add tests for every documented enum and CHECK boundary.
 - [x] Add tests for all report-listed triggers and transaction rollback behavior.
 - [x] Fix test harness re-runnability by adding teardown logic for temporary test fixtures (Tournament 2, Matches 10/11) so `sp_run_constraint_tests()` does not fail on duplicate keys on repeated runs.
-- [ ] Add explicit test asserting `trg_users_bd` blocks physical deletion of users with historical records (Rule R9).
-- [ ] Add direct-SQL tests for total-specialization bypass attempts.
-- [ ] Add registration-update tests for closed tournaments and deactivated users.
-- [ ] Add bracket tests that do not depend on insertion order or `match_id` ordering.
+- [x] Add explicit test asserting `trg_users_bd` blocks physical deletion of users with historical records (Rule R9).
+- [x] Add direct-SQL tests for total-specialization bypass attempts.
+- [x] Add registration-update tests for closed tournaments and deactivated users.
+- [x] Add bracket tests that do not depend on insertion order or `match_id` ordering.
 
 ### Database verification
 
@@ -319,37 +319,37 @@ Complete each phase in order. The next phase begins only after the previous phas
 - [x] Add tests for deactivated users and historical-record deletion protection.
 - [x] Add explicit pass/fail output for each test.
 - [x] Ensure expected failures do not stop the entire test run unexpectedly.
-- [ ] Add update-path tests, not only insert-path tests (Phase 4).
-- [ ] Add null and boundary-value tests (Phase 4).
-- [ ] Add cancelled-reservation tests (Phase 4).
+- [x] Add update-path tests, not only insert-path tests (Phase 4).
+- [x] Add null and boundary-value tests (Phase 4).
+- [x] Add cancelled-reservation tests (Phase 4).
 - [x] Add repeated match-completion tests.
-- [ ] Add concurrent-booking and credit-limit race tests (Phase 4).
+- [x] Add concurrent-booking and credit-limit race tests (Phase 4).
 - [x] Add a clean-database reset procedure.
 - [x] Separate destructive local reset logic from production-safe deployment logic.
 - [ ] Record test results and attach them to the final submission.
 
 ## 4. Backend/API: implement the report workflows
 
-- [ ] Create `backend/`.
-- [ ] Add Node.js project configuration.
-- [ ] Add the Express server.
-- [ ] Add a MySQL connection pool.
-- [ ] Add environment-variable configuration.
-- [ ] Add a database health-check endpoint.
-- [ ] Add authentication and JWT handling.
-- [ ] Add role-based authorization.
-- [ ] Implement D-01 only in the end-semester implementation and document its schema/API impact.
-- [ ] Add endpoints for every intended user role in the report.
-- [ ] Add table-availability and reservation endpoints.
-- [ ] Add credit-ledger and balance endpoints.
-- [ ] Add tournament registration, bracket, and match-completion endpoints.
-- [ ] Add leaderboard, win-streak, head-to-head, and utilisation report endpoints.
-- [ ] Add inventory/reorder and coaching-assessment endpoints.
-- [ ] Ensure API payloads use the report's final names and domains.
-- [ ] Add request validation.
-- [ ] Add consistent error responses.
-- [ ] Add API tests.
-- [ ] Add backend setup instructions.
+- [x] Create `backend/`.
+- [x] Add Node.js project configuration.
+- [x] Add the Express server.
+- [x] Add a MySQL connection pool.
+- [x] Add environment-variable configuration.
+- [x] Add a database health-check endpoint.
+- [x] Add authentication and JWT handling.
+- [x] Add role-based authorization.
+- [x] Implement D-01 only in the end-semester implementation and document its schema/API impact.
+- [x] Add endpoints for every intended user role in the report.
+- [x] Add table-availability and reservation endpoints.
+- [x] Add credit-ledger and balance endpoints.
+- [x] Add tournament registration, bracket, and match-completion endpoints.
+- [x] Add leaderboard, win-streak, head-to-head, and utilisation report endpoints.
+- [x] Add inventory/reorder and coaching-assessment endpoints.
+- [x] Ensure API payloads use the report's final names and domains.
+- [x] Add request validation.
+- [x] Add consistent error responses.
+- [x] Add API tests.
+- [x] Add backend setup instructions.
 
 ## 5. Frontend/UI: demonstrate the report workflows
 
@@ -374,28 +374,28 @@ Complete each phase in order. The next phase begins only after the previous phas
 
 ## 6. Deployment and documentation
 
-- [ ] Add `.env.example`.
-- [ ] Confirm no secrets are committed.
-- [ ] Add production database configuration.
+- [x] Add `.env.example`.
+- [x] Confirm no secrets are committed.
+- [x] Add production database configuration.
 - [x] Standardize database initialization and clean reset via `database/schema.sql` and `database/reset_local.sql` (incremental versioned migrations deferred to Tier 3).
-- [ ] Document the database setup and reset process.
-- [ ] Document script execution order.
-- [ ] Document backend build and start commands.
-- [ ] Document frontend build and deploy commands.
-- [ ] Configure CORS.
-- [ ] Document HTTPS requirements.
-- [ ] Document database backup and restore.
-- [ ] Add logging and error-monitoring guidance.
-- [ ] Add service health checks.
-- [ ] Add a deployment architecture diagram.
+- [x] Document the database setup and reset process.
+- [x] Document script execution order.
+- [x] Document backend build and start commands.
+- [x] Document frontend build and deploy commands.
+- [x] Configure CORS.
+- [x] Document HTTPS requirements.
+- [x] Document database backup and restore.
+- [x] Add logging and error-monitoring guidance.
+- [x] Add service health checks.
+- [x] Add a deployment architecture diagram.
 - [ ] Test deployment from a clean machine.
 - [ ] Configure `main` branch protection to require pull requests, review approval, and passing CI checks.
 - [ ] Disable direct pushes and force pushes to `main`.
-- [ ] Ensure CI includes database, backend, frontend, build, and static-quality checks before release.
+- [x] Ensure CI includes database, backend, frontend, build, and static-quality checks before release.
 - [ ] Tag a final release commit.
-- [ ] Update `README.md` with complete setup and usage instructions.
-- [ ] Update `README.md` to describe the report-aligned schema.
-- [ ] Add a final schema mapping to `README.md`.
+- [x] Update `README.md` with complete setup and usage instructions.
+- [x] Update `README.md` to describe the report-aligned schema.
+- [x] Add a final schema mapping to `README.md`.
 
 ## 7. Presentation and demo
 
@@ -434,15 +434,15 @@ These items represent secondary hardening, volumetric scaling, and enterprise te
 
 - [ ] All required sections above are complete or explicitly marked out of scope.
 - [ ] A clean-machine setup succeeds from the README.
-- [ ] Database tests pass.
+- [x] Database tests pass.
 - [x] CI pipeline executes `CALL sp_run_constraint_tests();` twice in succession to verify test suite re-runnability and state idempotency.
 - [ ] Mutation run completed once before release and results attached, or trigger-coverage claims in final report/slides are scoped to verified test cases.
-- [ ] Backend tests pass.
-- [ ] Frontend tests pass.
-- [ ] The end-to-end demo succeeds.
+- [x] Backend tests pass.
+- [x] Frontend tests pass.
+- [x] The end-to-end demo succeeds.
 - [ ] The final report matches the repository.
-- [ ] Every report-to-file traceability row has been checked.
-- [ ] The deviation register is empty or fully approved and documented with evidence for D-01 and D-02.
-- [ ] The presentation slides, README, and final report explicitly state the specialization design boundary: "Application-path integrity with database-level diagnostic detection, not full database-enforced specialization."
+- [x] Every report-to-file traceability row has been checked.
+- [x] The deviation register is empty or fully approved and documented with evidence for D-01 and D-02.
+- [x] The presentation slides, README, and final report explicitly state the specialization design boundary: "Application-path integrity with database-level diagnostic detection, not full database-enforced specialization."
 - [ ] The reviewed final implementation is pushed to `main` in `https://github.com/StuCCAn/DBMS-Project`.
 - [ ] The team has reviewed and signed off the presentation package.
